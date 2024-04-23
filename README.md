@@ -58,7 +58,7 @@ repeat $\texttt{iterations}$ times \
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$ \texttt{FPS}_i = \frac{\texttt{1}}{\texttt{latency}_i}$\
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$ \texttt{FPS.append(FPS}_i \texttt{})$    
 end      
-> $\texttt{mean\_latency}  \gets \texttt{mean(latency)*1000}$\
-$\texttt{std\_latency} \gets \texttt{std(latency)*1000}$\
-$\texttt{mean\_FPS} \gets \texttt{mean(FPS)}$\
-$\texttt{std\_FPS} \gets \texttt{std(FPS)}$
+> $\texttt{meanLatency}  \gets \texttt{mean(latency)*1000}$\
+$\texttt{stdLatency} \gets \texttt{std(latency)*1000}$\
+$\texttt{meanFPS} \gets \texttt{mean(FPS)}$\
+$\texttt{stdFPS} \gets \texttt{std(FPS)}$
