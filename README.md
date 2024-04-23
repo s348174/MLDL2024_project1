@@ -50,13 +50,13 @@ $\texttt{iterations} \gets 1000$\
 $\texttt{latency} \gets \texttt{[]}$\
 $\texttt{FPS} \gets \texttt{[]}$ \
 repeat $\texttt{iterations}$ times \
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$\texttt{start = time.time()}$\
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$\texttt{output = model(image)}$\
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$\texttt{end = time.time()}$\
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$ \texttt{latency}_i \texttt{ = end - start} $\
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$ \texttt{latency.append(latency}_i \texttt{}) $\
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$ \texttt{FPS}_i = \frac{\texttt{1}}{\texttt{latency}_i}$\
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$ \texttt{FPS.append(FPS}_i \texttt{})$    
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\texttt{start = time.time()}$\
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\texttt{output = model(image)}$\
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\texttt{end = time.time()}$\
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\texttt{latency}_i \texttt{ = end - start} $\
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\texttt{latency.append(latency}_i \texttt{}) $\
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\texttt{FPS}_i = \frac{\texttt{1}}{\texttt{latency}_i}$\
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\texttt{FPS.append(FPS}_i \texttt{})$    
 end      
 > $\texttt{meanLatency}  \gets \texttt{mean(latency)*1000}$\
 $\texttt{stdLatency} \gets \texttt{std(latency)*1000}$\
