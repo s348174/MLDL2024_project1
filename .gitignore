@@ -1,0 +1,3 @@
+# Ignora completamente la directory datasets/cityscapes/
+datasets/Cityscapes/
+pyenv/
