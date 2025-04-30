@@ -30,3 +30,36 @@ class CityScapes(Dataset):
 
     def __len__(self):
         return len(self.samples)
+    
+class CityScapesSegmentation(Dataset):
+    def __init__(self, image_dir, label_dir, transform=None, target_transform=None):
+        self.image_dir = image_dir
+        self.label_dir = label_dir
+        self.transform = transform
+        self.target_transform = target_transform
+
+        self.images = sorted([
+            os.path.join(image_dir, fname) for fname in os.listdir(image_dir)
+            if fname.endswith(".png") or fname.endswith(".jpg")
+        ])
+        self.labels = sorted([
+            os.path.join(label_dir, fname) for fname in os.listdir(label_dir)
+            if fname.endswith(".png")
+        ])
+        assert len(self.images) == len(self.labels), "Mismatch between images and labels"
+
+    def __getitem__(self, index):
+        image = Image.open(self.images[index]).convert("RGB")
+        label = Image.open(self.labels[index])  # Should be mode "L" with class indices
+
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+        else:
+            label = torch.from_numpy(np.array(label)).long()
+
+        return image, label
+
+    def __len__(self):
+        return len(self.images)

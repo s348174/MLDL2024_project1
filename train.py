@@ -1,7 +1,7 @@
 # TODO: Define here your training and validation loops.
 
 from torchvision import transforms
-from datasets.cityscapes import CityScapes
+from datasets.cityscapes import CityScapesSegmentation
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -20,9 +20,17 @@ from tempfile import TemporaryDirectory
 # /path/to/train/class2/image2.png
 dataset_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/images"
 train_path = dataset_path + "/train"
-dataset = CityScapes(train_path, transform=transforms.ToTensor())
+image_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/images/train"
+label_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/labels/train"
+dataset = CityScapesSegmentation(
+    image_dir=image_dir,
+    label_dir=label_dir,
+    transform=transforms.ToTensor(),
+    target_transform=transforms.Lambda(lambda x: torch.from_numpy(np.array(x)).long())
+)
+
 test_path = dataset_path + "/val"
-test_data = CityScapes(test_path, transform=transforms.ToTensor())
+test_data = CityScapesSegmentation(test_path, transform=transforms.ToTensor())
 
 # Visualize the training data
 class_names = dataset.classes
@@ -61,7 +69,7 @@ for epoch in range(1):  # Change to desired number of epochs
     model.train()
     for images, labels in train_loader:
         images, labels = images.to(device), labels.to(device)
-        outputs = model(images)
+        outputs, _, _ = model(images)
         loss = criterion(outputs, labels)
         optimizer.zero_grad()
         loss.backward()
