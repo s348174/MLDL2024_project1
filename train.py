@@ -1,5 +1,8 @@
 # TODO: Define here your training and validation loops.
 
+import torch
+from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
+from torch.utils.data import DataLoader
 from torchvision import transforms
 from datasets.cityscapes import CityScapesSegmentation
 import matplotlib.pyplot as plt
@@ -57,9 +60,6 @@ def deeplab_train(dataset_path):
     plt.show()
 
     # Define the loader
-    import torch
-    from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
-    from torch.utils.data import DataLoader
     train_loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=2)
 
     # Prepare model, loss, optimizer
