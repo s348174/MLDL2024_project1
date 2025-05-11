@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from torchvision import transforms
 import glob
+from torchvision.datasets import VisionDataset
 
 class CityScapes(Dataset):
     def __init__(self, root_dir, transform=None):
@@ -35,6 +36,8 @@ class CityScapes(Dataset):
     def __len__(self):
         return len(self.samples)
     
+
+
 class CityScapesSegmentation(Dataset):
     def __init__(self, image_dir, label_dir, transform=None, target_transform=None):
         self.image_dir = image_dir
@@ -43,18 +46,34 @@ class CityScapesSegmentation(Dataset):
         self.target_transform = target_transform
         self.classes = sorted(os.listdir(label_dir))
 
-        self.images = sorted([
-            fname for fname in glob.glob(os.path.join(image_dir, '**', '*'), recursive=True)
-            if fname.lower().endswith(('.png', '.jpg'))
-        ])
-        self.labels = sorted([
-            fname for fname in glob.glob(os.path.join(label_dir, '**', '*.png'), recursive=True)
-        ])
-        #assert len(self.images) == len(self.labels), "Mismatch between images and labels"
+        # Match Cityscapes file naming conventions
+        image_files = glob.glob(os.path.join(image_dir, '**', '*_leftImg8bit.png'), recursive=True)
+        label_files = glob.glob(os.path.join(label_dir, '**', '*_gtFine_labelTrainIds.png'), recursive=True)
+
+        print(f"Found {len(image_files)} images and {len(label_files)} labels")
+
+        # Map basename without suffix to full path
+        image_map = {
+            os.path.basename(f).replace('_leftImg8bit.png', ''): f for f in image_files
+        }
+        label_map = {
+            os.path.basename(f).replace('_gtFine_labelTrainIds.png', ''): f for f in label_files
+        }
+
+        print(f"Image map:", len(image_map.keys()))
+
+        # Match based on shared keys
+        common_keys = sorted(set(image_map.keys()) & set(label_map.keys()))
+        self.images = [image_map[k] for k in common_keys]
+        self.labels = [label_map[k] for k in common_keys]
+
+        print(f"Matched {len(self.images)} image-label pairs")
+
+        assert len(self.images) == len(self.labels), "Image-label count mismatch"
 
     def __getitem__(self, index):
         image = Image.open(self.images[index]).convert("RGB")
-        label = Image.open(self.labels[index])  # Should be mode "L" with class indices
+        label = Image.open(self.labels[index])
 
         if self.transform:
             image = self.transform(image)
