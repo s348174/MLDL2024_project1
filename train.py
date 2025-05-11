@@ -26,14 +26,26 @@ from tempfile import TemporaryDirectory
 #image_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/images/train"
 #label_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/labels/train"
 def deeplab_train(dataset_path, pretrain_path):
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
     image_dir = dataset_path + "/images/train"
     label_dir = dataset_path + "/gtFine/train"
 
+    input_transform = transforms.Compose([
+    transforms.Resize((256, 256)), # Resize to 256x256 or smaller if needed
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+    target_transform = transforms.Compose([
+        transforms.Resize((256, 256)), # Resize to 256x256 or smaller if needed
+        transforms.ToTensor(),
+    ])  
     dataset = CityScapesSegmentation(
         image_dir=image_dir,
         label_dir=label_dir,
-        transform=transforms.ToTensor(),
-        target_transform=transforms.Lambda(lambda x: torch.from_numpy(np.array(x)).long())
+        transform=input_transform,
+        target_transform=target_transform,
+        #target_transform=transforms.Lambda(lambda x: torch.from_numpy(np.array(x)).long())
     )
 
     #test_path = dataset_path + "/val"
