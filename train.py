@@ -25,7 +25,7 @@ from tempfile import TemporaryDirectory
 #train_path = dataset_path + "/train"
 #image_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/images/train"
 #label_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/labels/train"
-def deeplab_train(dataset_path):
+def deeplab_train(dataset_path, pretrain_path):
     image_dir = dataset_path + "/images/train"
     label_dir = dataset_path + "/gtFine/train"
 
@@ -65,7 +65,7 @@ def deeplab_train(dataset_path):
 
     # Prepare model, loss, optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path='deeplab_resnet_pretrained_imagenet.pth')
+    model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_path)
     model = model.to(device)
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
