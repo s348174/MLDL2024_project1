@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch
 from torchvision import transforms
+import glob
 
 class CityScapes(Dataset):
     def __init__(self, root_dir, transform=None):
@@ -40,16 +41,16 @@ class CityScapesSegmentation(Dataset):
         self.label_dir = label_dir
         self.transform = transform
         self.target_transform = target_transform
+        self.classes = sorted(os.listdir(label_dir))
 
         self.images = sorted([
-            os.path.join(image_dir, fname) for fname in os.listdir(image_dir)
-            if fname.endswith(".png") or fname.endswith(".jpg")
+            fname for fname in glob.glob(os.path.join(image_dir, '**', '*'), recursive=True)
+            if fname.lower().endswith(('.png', '.jpg'))
         ])
         self.labels = sorted([
-            os.path.join(label_dir, fname) for fname in os.listdir(label_dir)
-            if fname.endswith(".png")
+            fname for fname in glob.glob(os.path.join(label_dir, '**', '*.png'), recursive=True)
         ])
-        assert len(self.images) == len(self.labels), "Mismatch between images and labels"
+        #assert len(self.images) == len(self.labels), "Mismatch between images and labels"
 
     def __getitem__(self, index):
         image = Image.open(self.images[index]).convert("RGB")

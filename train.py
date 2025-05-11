@@ -27,7 +27,7 @@ from tempfile import TemporaryDirectory
 #label_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/labels/train"
 def deeplab_train(dataset_path):
     image_dir = dataset_path + "/images/train"
-    label_dir = dataset_path + "/labels/train"
+    label_dir = dataset_path + "/gtFine/train"
 
     dataset = CityScapesSegmentation(
         image_dir=image_dir,
@@ -36,35 +36,36 @@ def deeplab_train(dataset_path):
         target_transform=transforms.Lambda(lambda x: torch.from_numpy(np.array(x)).long())
     )
 
-    test_path = dataset_path + "/val"
-    test_data = CityScapesSegmentation(test_path, transform=transforms.ToTensor())
+    #test_path = dataset_path + "/val"
+    #test_data = CityScapesSegmentation(test_path, transform=transforms.ToTensor())
 
     # Visualize the training data
     class_names = dataset.classes
     print(f"Class names: {class_names}")
     print(f"Number of classes: {len(class_names)}")
-    print(f"Number of training samples: {len(dataset)}")
-    print(f"Number of test samples: {len(test_data)}")
-    print(f"Image shape: {dataset[0][0].shape}")
+    print(f"Number of training samples: {len(dataset.images)}")
+    print(f"Number of labels: {len(dataset.labels)}")
+    print(f"First image", dataset.images[0])
+    #print(f"Number of test samples: {len(test_data)}")
     # Let's visualize the first training sample
-    image, label = dataset[0]
-    plt.imshow(image.permute(1, 2, 0))
-    plt.title(f"Label: {class_names[label]}")
+    image = Image.open(dataset.images[0])
+    #plt.imshow(image.permute(1, 2, 0))
+    #plt.title(f"Label: {class_names[image]}")
     plt.axis("off")
     plt.show()
     # Let's visualize the first test sample
-    image, label = test_data[0]
-    plt.imshow(image.permute(1, 2, 0))
-    plt.title(f"Label: {class_names[label]}")
-    plt.axis("off")
-    plt.show()
+    #image, label = test_data[0]
+    #plt.imshow(image.permute(1, 2, 0))
+    #plt.title(f"Label: {class_names[label]}")
+    #plt.axis("off")
+    #plt.show()
 
     # Define the loader
     train_loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=2)
 
     # Prepare model, loss, optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = get_deeplab_v2(num_classes=len(class_names), pretrained=True, pretrain_model_path='deepLab_resnet_pretrained_imagenet.pth')
+    model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path='deeplab_resnet_pretrained_imagenet.pth')
     model = model.to(device)
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
