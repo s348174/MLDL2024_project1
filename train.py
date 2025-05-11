@@ -14,6 +14,20 @@ import time
 import os
 from PIL import Image
 from tempfile import TemporaryDirectory
+from torchvision.transforms import functional as TF
+
+def convert_label_ids_to_train_ids(label_np):
+    # labelId to trainId mapping
+    LABEL_TO_TRAINID = {
+        7: 0, 8: 1, 11: 2, 12: 3, 13: 4,
+        17: 5, 19: 6, 20: 7, 21: 8, 22: 9,
+        23: 10, 24: 11, 25: 12, 26: 13, 27: 14,
+        28: 15, 31: 16, 32: 17, 33: 18
+    }
+    label_out = 255 * np.ones_like(label_np, dtype=np.uint8)
+    for label_id, train_id in LABEL_TO_TRAINID.items():
+        label_out[label_np == label_id] = train_id
+    return label_out
 
 # Setup training data
 # Assuming the dataset is structured as follows:
@@ -37,15 +51,17 @@ def deeplab_train(dataset_path, pretrain_path):
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
     target_transform = transforms.Compose([
-        transforms.Resize((256, 256)), # Resize to 256x256 or smaller if needed
-        transforms.ToTensor(),
+        transforms.Resize((256, 256), interpolation=Image.NEAREST), # Resize to 256x256 or smaller if needed
+        #transforms.ToTensor(),
+        #transforms.Lambda(lambda x: torch.from_numpy(np.array(x)).long())
+        transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long())
     ])  
     dataset = CityScapesSegmentation(
         image_dir=image_dir,
         label_dir=label_dir,
         transform=input_transform,
         target_transform=target_transform,
-        #target_transform=transforms.Lambda(lambda x: torch.from_numpy(np.array(x)).long())
+        
     )
 
     #test_path = dataset_path + "/val"
@@ -54,7 +70,7 @@ def deeplab_train(dataset_path, pretrain_path):
     # Visualize the training data
     class_names = dataset.classes
     print(f"Class names: {class_names}")
-    print(f"Number of classes: {len(class_names)}")
+    print(f"Number of classes:", dataset.num_classes)
     print(f"Number of training samples: {len(dataset.images)}")
     print(f"Number of labels: {len(dataset.labels)}")
     print(f"First image", dataset.images[0])
@@ -79,7 +95,9 @@ def deeplab_train(dataset_path, pretrain_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_path)
     model = model.to(device)
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+    #criterion = torch.nn.BCEWithLogitsLoss()
+    #criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     # Training loop (1 epoch example)
@@ -92,11 +110,11 @@ def deeplab_train(dataset_path, pretrain_path):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            print(f"Loss: {loss.item():.4f}")
+            #print(f"Loss: {loss.item():.4f}")
             # Save model checkpoint
-            if epoch % 10 == 0:
-                torch.save(model.state_dict(), f"deeplabv2_epoch_{epoch}.pth")
-                print(f"Model saved at epoch {epoch}")
+            #if epoch % 10 == 0:
+                #torch.save(model.state_dict(), f"deeplabv2_epoch_{epoch}.pth")
+                #print(f"Model saved at epoch {epoch}")
     # Save the model
     torch.save(model.state_dict(), "deeplabv2_final.pth")
     print("Model saved as deeplabv2_final.pth")
