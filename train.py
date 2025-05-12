@@ -39,7 +39,7 @@ def convert_label_ids_to_train_ids(label_np):
 #train_path = dataset_path + "/train"
 #image_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/images/train"
 #label_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/labels/train"
-def deeplab_train(dataset_path, pretrain_path):
+def deeplab_train(dataset_path, workspace_path):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
     image_dir = dataset_path + "/images/train"
@@ -73,14 +73,13 @@ def deeplab_train(dataset_path, pretrain_path):
     print(f"Number of classes:", dataset.num_classes)
     print(f"Number of training samples: {len(dataset.images)}")
     print(f"Number of labels: {len(dataset.labels)}")
-    print(f"First image", dataset.images[0])
-    #print(f"Number of test samples: {len(test_data)}")
-    # Let's visualize the first training sample
+    # Display the first image in the dataset
     image = Image.open(dataset.images[0])
-    #plt.imshow(image.permute(1, 2, 0))
-    #plt.title(f"Label: {class_names[image]}")
+    plt.imshow(image)
+    plt.title("First image in the dataset")
     plt.axis("off")
     plt.show()
+    #print(f"Number of test samples: {len(test_data)}")
     # Let's visualize the first test sample
     #image, label = test_data[0]
     #plt.imshow(image.permute(1, 2, 0))
@@ -93,6 +92,7 @@ def deeplab_train(dataset_path, pretrain_path):
 
     # Prepare model, loss, optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    pretrain_path = workspace_path + "/deeplab_resnet_pretrained_imagenet.pth"
     model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_path)
     model = model.to(device)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
@@ -116,5 +116,66 @@ def deeplab_train(dataset_path, pretrain_path):
                 #torch.save(model.state_dict(), f"deeplabv2_epoch_{epoch}.pth")
                 #print(f"Model saved at epoch {epoch}")
     # Save the model
-    torch.save(model.state_dict(), "deeplabv2_final.pth")
+    export_path = workspace_path + "/export/deeplabv2_final.pth"
+    torch.save(model.state_dict(), export_path)
     print("Model saved as deeplabv2_final.pth")
+
+def deeplab_test(model_path, dataset_path, save_dir=None, num_classes=19):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Prepare test dataset
+    image_dir = os.path.join(dataset_path, "images/val")
+    label_dir = os.path.join(dataset_path, "gtFine/val")
+
+    input_transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+
+    target_transform = transforms.Compose([
+        transforms.Resize((256, 256), interpolation=Image.NEAREST),
+        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long())
+    ])
+
+    test_dataset = CityScapesSegmentation(
+        image_dir=image_dir,
+        label_dir=label_dir,
+        transform=input_transform,
+        target_transform=target_transform
+    )
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+
+    # Load model
+    model = get_deeplab_v2(num_classes=num_classes, pretrain=False)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model = model.to(device)
+    model.eval()
+
+    print("Running inference...")
+
+    correct_pixels = 0
+    total_pixels = 0
+
+    with torch.no_grad():
+        for i, (image, label) in enumerate(test_loader):
+            image, label = image.to(device), label.to(device)
+
+            output, _, _ = model(image)
+            pred = torch.argmax(output.squeeze(), dim=0)
+
+            # Flatten predictions and labels
+            pred_flat = pred.view(-1)
+            label_flat = label.view(-1)
+
+            # Mask out ignored pixels (ex: 255)
+            mask = label_flat != 255
+            correct = (pred_flat[mask] == label_flat[mask]).sum().item()
+            total = mask.sum().item()
+
+            correct_pixels += correct
+            total_pixels += total
+
+    # After loop:
+    accuracy = correct_pixels / total_pixels
+    print(f"\nPixel Accuracy: {accuracy * 100:.2f}%")
