@@ -120,7 +120,8 @@ def deeplab_train(dataset_path, workspace_path):
     torch.save(model.state_dict(), export_path)
     print("Model saved as deeplabv2_final.pth")
 
-def deeplab_test(model_path, dataset_path, save_dir=None, num_classes=19):
+def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
+    model_path = workspace_path + "/export/deeplabv2_final.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Prepare test dataset
@@ -175,6 +176,7 @@ def deeplab_test(model_path, dataset_path, save_dir=None, num_classes=19):
 
             correct_pixels += correct
             total_pixels += total
+            print(f"Processed {i + 1}/{len(test_loader)} images. Correct pixels: {correct_pixels}, Total pixels: {total_pixels}")
 
     # After loop:
     accuracy = correct_pixels / total_pixels

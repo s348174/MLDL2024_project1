@@ -1,5 +1,6 @@
 # Ignora completamente la directory datasets/cityscapes/
 datasets/Cityscapes/
 pyenv/
+export/
 # Ignora tutti i pretrained weigths
 *.pth
