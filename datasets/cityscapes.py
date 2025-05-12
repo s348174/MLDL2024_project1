@@ -44,7 +44,12 @@ class CityScapesSegmentation(Dataset):
         self.label_dir = label_dir
         self.transform = transform
         self.target_transform = target_transform
-        self.classes = sorted(os.listdir(label_dir))
+        self.classes = [
+            'road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light',
+            'traffic sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
+            'truck', 'bus', 'train', 'motorcycle', 'bicycle'
+        ]
+        self.num_classes = len(self.classes)
 
         # Match Cityscapes file naming conventions
         image_files = glob.glob(os.path.join(image_dir, '**', '*_leftImg8bit.png'), recursive=True)
