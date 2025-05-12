@@ -61,7 +61,7 @@ def deeplab_train(dataset_path, pretrain_path):
     #plt.show()
 
     # Define the loader
-    train_loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=2)
+    train_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=2)
 
     # Prepare model, loss, optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
