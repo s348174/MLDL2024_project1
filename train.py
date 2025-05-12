@@ -161,7 +161,7 @@ def deeplab_test(model_path, dataset_path, save_dir=None, num_classes=19):
         for i, (image, label) in enumerate(test_loader):
             image, label = image.to(device), label.to(device)
 
-            output, _, _ = model(image)
+            output = model(image)
             pred = torch.argmax(output.squeeze(), dim=0)
 
             # Flatten predictions and labels
