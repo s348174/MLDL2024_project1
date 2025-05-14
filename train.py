@@ -100,8 +100,8 @@ def deeplab_train(dataset_path, workspace_path):
     #criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
-    # Training loop (1 epoch example)
-    for epoch in range(1):  # Change the number of epochs
+    # Training loop
+    for epoch in range(10):  # Change the number of epochs
         model.train()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
