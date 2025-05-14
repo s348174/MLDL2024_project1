@@ -4,7 +4,7 @@ import torch
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from datasets.cityscapes import CityScapesSegmentation
+from cityscapes import CityScapesSegmentation
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
