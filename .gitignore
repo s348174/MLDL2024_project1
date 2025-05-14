@@ -3,5 +3,7 @@ datasets/Cityscapes/
 pyenv/
 export/
 __pycache__/
+.jupyter/
+.ipynb_checkpoints/
 # Ignora tutti i pretrained weigths
 *.pth
