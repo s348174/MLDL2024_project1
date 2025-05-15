@@ -4,6 +4,7 @@ import torch
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
 from torchvision import transforms
+#from datasets.cityscapes import CityScapesSegmentation
 from cityscapes import CityScapesSegmentation
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,6 +17,9 @@ from PIL import Image
 from tempfile import TemporaryDirectory
 from torchvision.transforms import functional as TF
 from utils import fast_hist, per_class_iou
+import time
+from fvcore.nn import FlopCountAnalysis, flop_count_table
+import multiprocessing
 
 def convert_label_ids_to_train_ids(label_np):
     # labelId to trainId mapping
@@ -87,7 +91,9 @@ def deeplab_train(dataset_path, workspace_path):
     #plt.show()
 
     # Define the loader
+    #max_num_workers = multiprocessing.cpu_count()
     train_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=2)
+    #print(f"Using {max_num_workers} workers for data loading.")
 
     # Prepare model, loss, optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -111,7 +117,7 @@ def deeplab_train(dataset_path, workspace_path):
             optimizer.step()
             #print(f"Loss: {loss.item():.4f}")
             # Save model checkpoint
-            if epoch % 10 == 0:
+            if epoch % 2 == 0:
                 checkpoint_file = workspace_path + "/export/deeplabv2_epoch_{}.pth".format(epoch)
                 torch.save(model.state_dict(), f"deeplabv2_epoch_{epoch}.pth")
                 print(f"Model saved at epoch {epoch}")
@@ -129,13 +135,13 @@ def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
     label_dir = os.path.join(dataset_path, "gtFine/val")
 
     input_transform = transforms.Compose([
-        transforms.Resize((256, 256)),
+        transforms.Resize((512, 1024)),  # Resize to 512x1024 resolution
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
 
     target_transform = transforms.Compose([
-        transforms.Resize((256, 256), interpolation=Image.NEAREST),
+        transforms.Resize((512, 1024), interpolation=Image.NEAREST),
         transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long())
     ])
 
@@ -158,12 +164,24 @@ def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
     correct_pixels = 0
     total_pixels = 0
 
+    ########################
+    # METRICS INIZIALIZATION
+    ########################
+    # Initialize histogram for IoU
+    hist = np.zeros((num_classes, num_classes))
+    # Initialize lists to store latency and FPS values
+    latency = []
+    fps = []
+
     with torch.no_grad():
         for i, (image, label) in enumerate(test_loader):
             image, label = image.to(device), label.to(device)
-
+            # Start timer
+            start_time = time.time()
             output = model(image)
             pred = torch.argmax(output.squeeze(), dim=0)
+            # End timer
+            end_time = time.time()
 
             # Flatten predictions and labels
             pred_flat = pred.view(-1)
@@ -177,7 +195,35 @@ def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
             correct_pixels += correct
             total_pixels += total
             print(f"Processed {i + 1}/{len(test_loader)} images. Correct pixels: {correct_pixels}, Total pixels: {total_pixels}")
+            
+            # Metrics calculation
+            # Update histogram
+            hist += fast_hist(label_flat, pred_flat, num_classes)
+            # Calculate latency for this iteration
+            latency_i = end_time - start_time
+            latency.append(latency_i)
+            # Calculate FPS for this iteration
+            fps_i = 1 / latency_i
+            fps.append(fps_i)
 
-    # After loop:
+    # After loop metrics
+
+    # Calculate pixel accuracy
     accuracy = correct_pixels / total_pixels
     print(f"\nPixel Accuracy: {accuracy * 100:.2f}%")
+
+    # Calculate per-class IoU and mean IoU
+    iou_per_class = per_class_iou(hist)
+    mean_iou = np.nanmean(iou_per_class)
+    print(f"Per-class IoU: {iou_per_class}")
+    print(f"Mean IoU: {mean_iou}")
+
+    # Calculate mean and standard deviation for latency and FPS
+    mean_latency = np.mean(latency) * 1000  # Convert to milliseconds
+    std_latency = np.std(latency) * 1000    # Convert to milliseconds
+    mean_fps = np.mean(fps)
+    std_fps = np.std(fps)
+    print(f"Mean Latency: {mean_latency:.2f} ms")
+    print(f"Latency Std Dev: {std_latency:.2f} ms")
+    print(f"Mean FPS: {mean_fps:.2f}")
+    print(f"FPS Std Dev: {std_fps:.2f}")  
