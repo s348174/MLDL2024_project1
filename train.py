@@ -101,7 +101,7 @@ def deeplab_train(dataset_path, workspace_path):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     # Training loop
-    for epoch in range(10):  # Change the number of epochs
+    for epoch in range(50):  # Change the number of epochs
         model.train()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
@@ -112,9 +112,10 @@ def deeplab_train(dataset_path, workspace_path):
             optimizer.step()
             #print(f"Loss: {loss.item():.4f}")
             # Save model checkpoint
-            #if epoch % 10 == 0:
-                #torch.save(model.state_dict(), f"deeplabv2_epoch_{epoch}.pth")
-                #print(f"Model saved at epoch {epoch}")
+            if epoch % 10 == 0:
+                checkpoint_file = workspace_path + "/export/deeplabv2_epoch_{}.pth".format(epoch)
+                torch.save(model.state_dict(), f"deeplabv2_epoch_{epoch}.pth")
+                print(f"Model saved at epoch {epoch}")
     # Save the model
     export_path = workspace_path + "/export/deeplabv2_final.pth"
     torch.save(model.state_dict(), export_path)
