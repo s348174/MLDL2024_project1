@@ -46,16 +46,14 @@ def deeplab_train(dataset_path, workspace_path):
     label_dir = dataset_path + "/gtFine/train"
 
     input_transform = transforms.Compose([
-    transforms.Resize((256, 256)), # Resize to 256x256 or smaller if needed
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        transforms.Resize((512, 1024)),  # Resize to 512x1024 resolution
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),  # Standard normalization for ImageNet
     ])
     target_transform = transforms.Compose([
-        transforms.Resize((256, 256), interpolation=Image.NEAREST), # Resize to 256x256 or smaller if needed
-        #transforms.ToTensor(),
-        #transforms.Lambda(lambda x: torch.from_numpy(np.array(x)).long())
+        transforms.Resize((512, 1024), interpolation=Image.NEAREST),  # Resize to 512x1024 resolution
         transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long())
-    ])  
+    ])
     dataset = CityScapesSegmentation(
         image_dir=image_dir,
         label_dir=label_dir,
