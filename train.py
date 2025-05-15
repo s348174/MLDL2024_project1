@@ -119,7 +119,7 @@ def deeplab_train(dataset_path, workspace_path):
             # Save model checkpoint
             if epoch % 2 == 0:
                 checkpoint_file = workspace_path + "/export/deeplabv2_epoch_{}.pth".format(epoch)
-                torch.save(model.state_dict(), f"deeplabv2_epoch_{epoch}.pth")
+                torch.save(model.state_dict(), checkpoint_file)
                 print(f"Model saved at epoch {epoch}")
     # Save the model
     export_path = workspace_path + "/export/deeplabv2_final.pth"
