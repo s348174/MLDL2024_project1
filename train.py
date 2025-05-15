@@ -19,7 +19,7 @@ from torchvision.transforms import functional as TF
 from utils import fast_hist, per_class_iou
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
-import multiprocessing
+#import multiprocessing
 
 def convert_label_ids_to_train_ids(label_np):
     # labelId to trainId mapping
@@ -226,4 +226,11 @@ def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
     print(f"Mean Latency: {mean_latency:.2f} ms")
     print(f"Latency Std Dev: {std_latency:.2f} ms")
     print(f"Mean FPS: {mean_fps:.2f}")
-    print(f"FPS Std Dev: {std_fps:.2f}")  
+    print(f"FPS Std Dev: {std_fps:.2f}")
+
+    # FLOP calculations
+    height, width = 512, 1024  # Input image dimensions
+    dummy_input = torch.zeros((1, 3, height, width)).to(device)  # Batch size = 1, 3 channels (RGB)
+    flops = FlopCountAnalysis(model, dummy_input)
+    print(flop_count_table(flops))
+    print(f"Total FLOPs: {flops.total() / 1e9:.2f} GFLOPs")
