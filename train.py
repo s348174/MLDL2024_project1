@@ -15,6 +15,7 @@ import os
 from PIL import Image
 from tempfile import TemporaryDirectory
 from torchvision.transforms import functional as TF
+from utils import fast_hist, per_class_iou
 
 def convert_label_ids_to_train_ids(label_np):
     # labelId to trainId mapping
