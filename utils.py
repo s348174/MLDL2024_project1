@@ -1,5 +1,5 @@
 import numpy as np
-
+import torch
 
 def poly_lr_scheduler(optimizer, init_lr, iter, lr_decay_iter=1,
                       max_iter=300, power=0.9):
@@ -25,6 +25,10 @@ def fast_hist(a, b, n):
     a and b are label and prediction respectively
     n is the number of classes
     '''
+    if isinstance(a, torch.Tensor):
+        a = a.cpu().numpy()
+    if isinstance(b, torch.Tensor):
+        b = b.cpu().numpy()
     k = (a >= 0) & (a < n)
     return np.bincount(n * a[k].astype(int) + b[k], minlength=n ** 2).reshape(n, n)
 
