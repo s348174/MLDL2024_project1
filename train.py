@@ -95,38 +95,39 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     model = model.to(device)
 
     # Define loss function
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=255) #should be used for deeplabv2 but also for ResNetMulti
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=255) # Should be used for deeplabv2 but also for ResNetMulti
     #criterion = torch.nn.BCEWithLogitsLoss()
     #criterion = torch.nn.MSELoss()
 
     # Define optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4) #optimizer that changes the learning rate at each step 
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4) # Optimizer that changes the learning rate at each step 
     #optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9, weight_decay=5e-4)
     #optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
 
     # Initialize GradScaler for mixed precision training
-    scaler = GradScaler(enabled=True) #it makes the training faster
+    scaler = GradScaler(enabled=True) # It makes the training faster by implementing AMP
 
     ###############
     # TRAINING LOOP
     ###############
     for epoch in range(num_epochs):
         model.train()
-        for images, labels in train_loader: #for each batch
-            images, labels = images.to(device), labels.to(device) #it takes images and labels from the dataloader
+        for images, labels in train_loader: # For each batch
+            images, labels = images.to(device), labels.to(device) # It takes images and labels from the dataloader
             #outputs, _, _ = model(images)
             #loss = criterion(outputs, labels)
 
             # Mixed precision training with gradient scaling
-            optimizer.zero_grad() #kills the gradient at every batch
+            optimizer.zero_grad() # Resets the gradient at every batch
 
-            with autocast(device_type="cuda", enabled=True): #when possible (for instance in convolutions but not in losses) it uses float16 instead of float32 
+            with autocast(device_type="cuda", enabled=True): 
+                # When possible (for instance in convolutions but not in losses) it uses float16 instead of float32 
                 outputs, _, _ = model(images)
                 loss = criterion(outputs, labels)
 
-            scaler.scale(loss).backward() #it scales dynamically the gradient in order to avoid underflow
+            scaler.scale(loss).backward() # It scales dynamically the gradient in order to avoid underflow
             scaler.step(optimizer)
-            scaler.update() #update weights
+            scaler.update() # Update the weights
 
             #loss.backward()
             #optimizer.step()
@@ -170,10 +171,11 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
         target_transform=target_transform
     )
     # Create a DataLoader for the test dataset
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False) #batch_size = 1 so that prediction is done 1 sample at a time (necessary to saving segmentation masks) --> individual evaluation
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False) 
+    # Batch_size = 1 so that prediction is done 1 sample at a time (necessary to saving segmentation masks) --> individual evaluation
 
     # Load model
-    model = get_deeplab_v2(num_classes=num_classes, pretrain=False) #pretrain is False because weights are inserted in the next line
+    model = get_deeplab_v2(num_classes=num_classes, pretrain=False) # Pretrain is False because weights are inserted in the next line
     model.load_state_dict(torch.load(model_path, map_location=device)) 
     model = model.to(device)
     model.eval()

@@ -20,7 +20,7 @@ def poly_lr_scheduler(optimizer, init_lr, iter, lr_decay_iter=1,
     # return lr
 
 
-def fast_hist(a, b, n): #confusion matrix
+def fast_hist(a, b, n): # Confusion matrix
     '''
     a and b are label and prediction respectively
     n is the number of classes
@@ -33,6 +33,6 @@ def fast_hist(a, b, n): #confusion matrix
     return np.bincount(n * a[k].astype(int) + b[k], minlength=n ** 2).reshape(n, n)
 
 
-def per_class_iou(hist): #iou metric
+def per_class_iou(hist): # IoU metric
     epsilon = 1e-5
     return (np.diag(hist)) / (hist.sum(1) + hist.sum(0) - np.diag(hist) + epsilon)
