@@ -4,8 +4,8 @@ import torch
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
 from torchvision import transforms
-#from datasets.cityscapes import CityScapesSegmentation #select this for local
-from cityscapes import CityScapesSegmentation #select this for colab
+from datasets.cityscapes import CityScapesSegmentation #select this for local
+#from cityscapes import CityScapesSegmentation #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -16,24 +16,13 @@ import os
 from PIL import Image
 from tempfile import TemporaryDirectory
 from torchvision.transforms import functional as TF
-from utils import fast_hist, per_class_iou
+from utils import fast_hist, per_class_iou, convert_label_ids_to_train_ids
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
 from torch.amp import autocast, GradScaler
 
-def convert_label_ids_to_train_ids(label_np):
-    # labelId to trainId mapping
-    LABEL_TO_TRAINID = {
-        7: 0, 8: 1, 11: 2, 12: 3, 13: 4,
-        17: 5, 19: 6, 20: 7, 21: 8, 22: 9,
-        23: 10, 24: 11, 25: 12, 26: 13, 27: 14,
-        28: 15, 31: 16, 32: 17, 33: 18
-    }
-    label_out = 255 * np.ones_like(label_np, dtype=np.uint8) #255 is the class that has to be ignored 
-    for label_id, train_id in LABEL_TO_TRAINID.items(): #each pixel gets the train_label 
-        label_out[label_np == label_id] = train_id
-    return label_out
+
 
 def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50): 
     # Set the environment variable for PyTorch CUDA memory allocation
