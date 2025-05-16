@@ -35,22 +35,17 @@ def convert_label_ids_to_train_ids(label_np):
         label_out[label_np == label_id] = train_id
     return label_out
 
-# Setup training data
-# Assuming the dataset is structured as follows:
-# /path/to/train/class1/image1.png
-# /path/to/train/class1/image2.png
-# /path/to/train/class2/image1.png
-# /path/to/train/class2/image2.png
-#dataset_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/images"
-#train_path = dataset_path + "/train"
-#image_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/images/train"
-#label_dir = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces/labels/train"
-def deeplab_train(dataset_path, workspace_path):
+def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50):
+    # Set the environment variable for PyTorch CUDA memory allocation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
+    #####################
+    # SETUP TRAINING DATA
+    #####################
+    # Paths to the training dataset
     image_dir = dataset_path + "/images/train"
     label_dir = dataset_path + "/gtFine/train"
-
+    # Defining the transforms
     input_transform = transforms.Compose([
         transforms.Resize((512, 1024)),  # Resize to 512x1024 resolution
         transforms.ToTensor(),
@@ -60,17 +55,17 @@ def deeplab_train(dataset_path, workspace_path):
         transforms.Resize((512, 1024), interpolation=Image.NEAREST),  # Resize to 512x1024 resolution
         transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long())
     ])
+    # Open the dataset
     dataset = CityScapesSegmentation(
         image_dir=image_dir,
         label_dir=label_dir,
         transform=input_transform,
-        target_transform=target_transform,
-        
+        target_transform=target_transform,   
     )
 
-    #test_path = dataset_path + "/val"
-    #test_data = CityScapesSegmentation(test_path, transform=transforms.ToTensor())
-
+    #######################
+    # DATASET VISUALIZATION
+    #######################
     # Visualize the training data
     class_names = dataset.classes
     print(f"Class names: {class_names}")
@@ -83,37 +78,39 @@ def deeplab_train(dataset_path, workspace_path):
     plt.title("First image in the dataset")
     plt.axis("off")
     plt.show()
-    #print(f"Number of test samples: {len(test_data)}")
-    # Let's visualize the first test sample
-    #image, label = test_data[0]
-    #plt.imshow(image.permute(1, 2, 0))
-    #plt.title(f"Label: {class_names[label]}")
-    #plt.axis("off")
-    #plt.show()
 
+    #####################
+    # PREPARING THE MODEL
+    #####################
     # Define the loader
     max_num_workers = multiprocessing.cpu_count()
     train_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=2)
     print(f"Using {max_num_workers} workers for data loading.")
 
-    # Prepare model, loss, optimizer
+    # Load the model and import to device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    pretrain_path = workspace_path + "/deeplab_resnet_pretrained_imagenet.pth"
-    model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_path)
-    #model = ResNetMulti(num_classes=len(class_names), pretrained=True)
+    model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_imagenet_path)
+    #model = ResNetMulti(num_classes=len(class_names), pretrained=True, pretrain_path=pretrain_imagenet_path)
     model = model.to(device)
+
+    # Define loss function
     criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
     #criterion = torch.nn.BCEWithLogitsLoss()
     #criterion = torch.nn.MSELoss()
+
+    # Define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     #optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9, weight_decay=5e-4)
     #optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
 
-    scaler = GradScaler(enabled=True)  # Initialize GradScaler for mixed precision training
+    # Initialize GradScaler for mixed precision training
+    scaler = GradScaler(enabled=True)
 
-    # Training loop
-    for epoch in range(50):  # Change the number of epochs
+    ###############
+    # TRAINING LOOP
+    ###############
+    for epoch in range(num_epochs):
         model.train()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
@@ -145,30 +142,35 @@ def deeplab_train(dataset_path, workspace_path):
     print("Model saved as deeplabv2_final.pth")
 
 def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
-    model_path = workspace_path + "/export/deeplabv2_final.pth"
+    # Set the environment variable for PyTorch CUDA memory allocation
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Prepare test dataset
+    #################
+    # SETUP TEST DATA
+    #################
+    # Paths to the test dataset
+    model_path = workspace_path + "/export/deeplabv2_final.pth"
     image_dir = os.path.join(dataset_path, "images/val")
     label_dir = os.path.join(dataset_path, "gtFine/val")
-
+    # Define the transforms
     input_transform = transforms.Compose([
         transforms.Resize((512, 1024)),  # Resize to 512x1024 resolution
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
-
     target_transform = transforms.Compose([
         transforms.Resize((512, 1024), interpolation=Image.NEAREST),
         transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long())
     ])
-
+    # Open the dataset
     test_dataset = CityScapesSegmentation(
         image_dir=image_dir,
         label_dir=label_dir,
         transform=input_transform,
         target_transform=target_transform
     )
+    # Create a DataLoader for the test dataset
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     # Load model
@@ -177,27 +179,32 @@ def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
     model = model.to(device)
     model.eval()
 
-    print("Running inference...")
-
-    correct_pixels = 0
-    total_pixels = 0
-
     ########################
     # METRICS INIZIALIZATION
     ########################
+    # Initialize correct and total pixel counts
+    correct_pixels = 0
+    total_pixels = 0
     # Initialize histogram for IoU
     hist = np.zeros((num_classes, num_classes))
     # Initialize lists to store latency and FPS values
     latency = []
     fps = []
 
+    #######################
+    # MODEL EVALUATION LOOP
+    #######################
+    print("Running inference...")
     with torch.no_grad():
         for i, (image, label) in enumerate(test_loader):
             image, label = image.to(device), label.to(device)
             # Start timer
             start_time = time.time()
+
+            # Making prediction
             output = model(image)
             pred = torch.argmax(output.squeeze(), dim=0)
+
             # End timer
             end_time = time.time()
 
@@ -209,12 +216,11 @@ def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
             mask = label_flat != 255
             correct = (pred_flat[mask] == label_flat[mask]).sum().item()
             total = mask.sum().item()
-
+            
+            # METRICS CALCULATIONS
+            # Update correct and total pixel counts
             correct_pixels += correct
             total_pixels += total
-            print(f"Processed {i + 1}/{len(test_loader)} images. Correct pixels: {correct_pixels}, Total pixels: {total_pixels}")
-            
-            # Metrics calculation
             # Update histogram
             hist += fast_hist(label_flat, pred_flat, num_classes)
             # Calculate latency for this iteration
@@ -224,8 +230,13 @@ def deeplab_test(dataset_path, workspace_path, save_dir=None, num_classes=19):
             fps_i = 1 / latency_i
             fps.append(fps_i)
 
-    # After loop metrics
+            # Print progress
+            if i % 10 == 0:
+                print(f"Iteration {i}/{len(test_loader)}, Latency: {latency_i:.4f}s, FPS: {fps_i:.2f}")
 
+    ####################
+    # AFTER LOOP METRICS
+    ####################
     # Calculate pixel accuracy
     accuracy = correct_pixels / total_pixels
     print(f"\nPixel Accuracy: {accuracy * 100:.2f}%")
