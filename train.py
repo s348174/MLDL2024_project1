@@ -19,7 +19,8 @@ from torchvision.transforms import functional as TF
 from utils import fast_hist, per_class_iou
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
-#import multiprocessing
+import multiprocessing
+from torch.amp import autocast, GradScaler
 
 def convert_label_ids_to_train_ids(label_np):
     # labelId to trainId mapping
@@ -91,36 +92,53 @@ def deeplab_train(dataset_path, workspace_path):
     #plt.show()
 
     # Define the loader
-    #max_num_workers = multiprocessing.cpu_count()
+    max_num_workers = multiprocessing.cpu_count()
     train_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=2)
-    #print(f"Using {max_num_workers} workers for data loading.")
+    print(f"Using {max_num_workers} workers for data loading.")
 
     # Prepare model, loss, optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
     pretrain_path = workspace_path + "/deeplab_resnet_pretrained_imagenet.pth"
     model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_path)
+    #model = ResNetMulti(num_classes=len(class_names), pretrained=True)
     model = model.to(device)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
     #criterion = torch.nn.BCEWithLogitsLoss()
     #criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9, weight_decay=5e-4)
+    #optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
+
+    scaler = GradScaler(device="cuda", enabled=True)  # Initialize GradScaler for mixed precision training
 
     # Training loop
     for epoch in range(50):  # Change the number of epochs
         model.train()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
-            outputs, _, _ = model(images)
-            loss = criterion(outputs, labels)
+            #outputs, _, _ = model(images)
+            #loss = criterion(outputs, labels)
+
+            # Mixed precision training with gradient scaling
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            #print(f"Loss: {loss.item():.4f}")
-            # Save model checkpoint
-            if epoch % 2 == 0:
-                checkpoint_file = workspace_path + "/export/deeplabv2_epoch_{}.pth".format(epoch)
-                torch.save(model.state_dict(), checkpoint_file)
-                print(f"Model saved at epoch {epoch}")
+
+            with autocast(device="cuda", enabled=True):
+                outputs, _, _ = model(images)
+                loss = criterion(outputs, labels)
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
+            #loss.backward()
+            #optimizer.step()
+
+        # Save model checkpoint
+        if epoch % 2 == 0:
+            checkpoint_file = workspace_path + "/export/deeplabv2_epoch_{}.pth".format(epoch)
+            torch.save(model.state_dict(), checkpoint_file)
+            print(f"Model saved at epoch {epoch}")
     # Save the model
     export_path = workspace_path + "/export/deeplabv2_final.pth"
     torch.save(model.state_dict(), export_path)
