@@ -159,8 +159,8 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
     target_transform = transforms.Compose([
-        transforms.Resize((512, 1024), interpolation=Image.NEAREST),
-        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long())
+        transforms.Resize((512, 1024), interpolation=Image.NEAREST),  # Resize to 512x1024 resolution
+        transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long())
     ])
     # Open the dataset
     test_dataset = CityScapesSegmentation(
@@ -202,7 +202,8 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
 
             # Making prediction
             output = model(image)
-            pred = torch.argmax(output.squeeze(), dim=0)
+            pred = torch.argmax(output, dim=1).squeeze(0)  # Get the predicted class for each pixel
+            #pred = torch.argmax(output.squeeze(), dim=0)
 
             # End timer
             end_time = time.time()
