@@ -110,7 +110,7 @@ def deeplab_train(dataset_path, workspace_path):
     #optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9, weight_decay=5e-4)
     #optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
 
-    scaler = GradScaler(enabled=True)  # Initialize GradScaler for mixed precision training
+    scaler = GradScaler(device_type="cuda", enabled=True)  # Initialize GradScaler for mixed precision training
 
     # Training loop
     for epoch in range(50):  # Change the number of epochs
@@ -123,7 +123,7 @@ def deeplab_train(dataset_path, workspace_path):
             # Mixed precision training with gradient scaling
             optimizer.zero_grad()
 
-            with autocast(enabled=True):
+            with autocast(device_type="cuda", enabled=True):
                 outputs, _, _ = model(images)
                 loss = criterion(outputs, labels)
 
