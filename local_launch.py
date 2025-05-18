@@ -4,7 +4,7 @@ from utils import compute_class_weights
 dataset_path_alberto = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/Cityscapes/Cityspaces"
 #dataset_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW Masone/MLDL2024_project1/datasets/Cityscapes/Cityscapes"
 workspace_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1"
-pretrained_image_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/export/deeplabv2_epoch_22.pth"
+#pretrained_image_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/export/deeplab_resnet_pretrained_imagenet.pth"
 num_epochs = 1
 #deeplab_train(dataset_path_alberto, workspace_path, pretrained_image_path, num_epochs)
 model_path = workspace_path + "/export/deeplabv2_epoch_8.pth"
