@@ -81,7 +81,7 @@ def compute_class_weights(label_dir, num_classes=19):
 
     for label_path in tqdm(label_paths, desc="Computing class frequencies"):
         label = np.array(Image.open(label_path))
-        label = convert_label_ids_to_train_ids(label)
+        #label = convert_label_ids_to_train_ids(label)
         for class_id in range(num_classes):
             class_counts[class_id] += np.sum(label == class_id)
 

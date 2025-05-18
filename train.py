@@ -42,7 +42,8 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     ])
     target_transform = transforms.Compose([ #prepare the labels
         transforms.Resize((512, 1024), interpolation=Image.NEAREST),  # Resize to 512x1024 resolution
-        transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long()) 
+        #transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long()) 
+        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long()), # Convert to tensor
     ])
     # Open the dataset
     dataset = CityScapesSegmentation(
@@ -150,7 +151,8 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
     ])
     target_transform = transforms.Compose([
         transforms.Resize((512, 1024), interpolation=Image.NEAREST),  # Resize to 512x1024 resolution
-        transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long())
+        #transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long())
+        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long()), # Convert to tensor
     ])
     # Open the dataset
     test_dataset = CityScapesSegmentation(
