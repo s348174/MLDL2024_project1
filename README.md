@@ -13,6 +13,10 @@ To download the dataset use the following download links.
 
 **GTA5**: https://drive.google.com/file/d/1xYxlcMR2WFCpayNrW2-Rb7N-950vvl23/view?usp=sharing
 
+## Cityscapes: label color mapping
+
+Documentation for Cityscapes label mapping: https://github.com/NVIDIA/semantic-segmentation/blob/main/datasets/cityscapes_labels.py
+
 ## GTA5: label color mapping
 
 Plese refer to this link to convert GTA5 labels in the same format of Cityscapes: https://github.com/sarrrrry/PyTorchDL_GTA5/blob/master/pytorchdl_gta5/labels.py
