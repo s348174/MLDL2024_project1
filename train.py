@@ -84,6 +84,7 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     # Define the loader
     #max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4) 
+    print(f"Using {batch_size} as batch size.")
     print(f"Using {max_num_workers} workers for data loading.")
 
     # Load the model
