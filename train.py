@@ -33,8 +33,12 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     #####################
 
     # Selects the device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
-    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA")
+    else:
+        device = torch.device("cpu")
+        print("CUDA not available, using CPU")
     
     # Paths to the training dataset
     image_dir = dataset_path + "/images/train"
