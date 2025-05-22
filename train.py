@@ -31,6 +31,11 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     #####################
     # SETUP TRAINING DATA
     #####################
+
+    # Selects the device (GPU if available)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
+    print(f"Using device: {device}")
+
     # Paths to the training dataset
     image_dir = dataset_path + "/images/train"
     label_dir = dataset_path + "/gtFine/train"
@@ -78,13 +83,10 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     #####################
     # Define the loader
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
-    print(f"Number of CPU cores: {max_num_workers}") #when Emanuele runs the code, it prints 8
     train_loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=max_num_workers) 
     print(f"Using {max_num_workers} workers for data loading.")
 
-    # Load the model and import to device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
-    print(f"Using device: {device}")
+    # Load the model
     model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_imagenet_path) #the baseline for semantic segmentation
     #model = ResNetMulti(num_classes=len(class_names), pretrained=True, pretrain_path=pretrain_imagenet_path)
     model = model.to(device)
