@@ -24,7 +24,7 @@ from torch.amp import autocast, GradScaler
 
 
 
-def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50, batch_size=2): 
+def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50, batch_size=4): 
     # Set the environment variable for PyTorch CUDA memory allocation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
