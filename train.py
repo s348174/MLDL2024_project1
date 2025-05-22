@@ -24,7 +24,7 @@ from torch.amp import autocast, GradScaler
 
 
 
-def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50): 
+def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50, batch_size=2): 
     # Set the environment variable for PyTorch CUDA memory allocation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
@@ -83,7 +83,7 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     #####################
     # Define the loader
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
-    train_loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=max_num_workers) 
+    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers) 
     print(f"Using {max_num_workers} workers for data loading.")
 
     # Load the model
