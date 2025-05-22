@@ -4,8 +4,8 @@ import torch
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from datasets.cityscapes import CityScapesSegmentation #select this for local
-#from cityscapes import CityScapesSegmentation #select this for colab
+#from datasets.cityscapes import CityScapesSegmentation #select this for local
+from cityscapes import CityScapesSegmentation #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -32,10 +32,10 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     # SETUP TRAINING DATA
     #####################
 
-    # Selects the device (GPU if available)
+    # Selects the device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
     print(f"Using device: {device}")
-
+    
     # Paths to the training dataset
     image_dir = dataset_path + "/images/train"
     label_dir = dataset_path + "/gtFine/train"
