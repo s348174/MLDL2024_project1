@@ -4,8 +4,8 @@ import torch
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
 from torchvision import transforms
-#from datasets.cityscapes import CityScapesSegmentation #select this for local
-from cityscapes import CityScapesSegmentation #select this for colab
+from datasets.cityscapes import CityScapesSegmentation #select this for local
+#from cityscapes import CityScapesSegmentation #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -16,7 +16,7 @@ import os
 from PIL import Image
 from tempfile import TemporaryDirectory
 from torchvision.transforms import functional as TF
-from utils import fast_hist, per_class_iou, convert_label_ids_to_train_ids
+from utils import fast_hist, per_class_iou, convert_label_ids_to_train_ids, compute_class_weights
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
@@ -53,6 +53,10 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
         target_transform=target_transform,   
     )
 
+    #evaluate the class weights based on frequencies
+    class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+    class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
+
     #######################
     # DATASET VISUALIZATION
     #######################
@@ -73,8 +77,9 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     # PREPARING THE MODEL
     #####################
     # Define the loader
-    max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2)
-    train_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=2) 
+    max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
+    print(f"Number of CPU cores: {max_num_workers}") #when Emanuele runs the code, it prints 8
+    train_loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=max_num_workers) 
     print(f"Using {max_num_workers} workers for data loading.")
 
     # Load the model and import to device
@@ -85,7 +90,8 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     model = model.to(device)
 
     # Define loss function
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=255) # Should be used for deeplabv2 but also for ResNetMulti
+    criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # normalized weights for each class
+    #criterion = torch.nn.CrossEntropyLoss(ignore_index=255) #default
     #criterion = torch.nn.BCEWithLogitsLoss()
     #criterion = torch.nn.MSELoss()
 

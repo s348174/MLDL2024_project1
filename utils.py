@@ -71,7 +71,12 @@ def compute_class_weights(label_dir, num_classes=19):
             - median_freq_balanced
     """
     class_counts = np.zeros(num_classes, dtype=np.int64)
-
+    
+    # Check if label_dir exists
+    if not os.path.exists(label_dir):
+        raise ValueError(f"Label directory {label_dir} does not exist.")
+    
+    
     # Walk recursively through label_dir
     label_paths = []
     for root, _, files in os.walk(label_dir):
@@ -79,7 +84,7 @@ def compute_class_weights(label_dir, num_classes=19):
             if file.endswith("_labelTrainIds.png"):
                 label_paths.append(os.path.join(root, file))
 
-    for label_path in tqdm(label_paths, desc="Computing class frequencies"):
+    for label_path in tqdm(label_paths, desc="Computing class frequencies", disable=True):
         label = np.array(Image.open(label_path))
         #label = convert_label_ids_to_train_ids(label)
         for class_id in range(num_classes):
