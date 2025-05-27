@@ -22,9 +22,11 @@ from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
 from torch.amp import autocast, GradScaler
 
+#################
+# TRAINIG DEEPLAB
+#################
 
-
-def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50, batch_size=4): 
+def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50, batch_size=2): 
     # Set the environment variable for PyTorch CUDA memory allocation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
@@ -87,7 +89,7 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     #####################
     # Define the loader
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4) 
+    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers) 
     print(f"Using {batch_size} as batch size.")
     print(f"Using {max_num_workers} workers for data loading.")
 
@@ -144,6 +146,10 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     export_path = workspace_path + "/export/deeplabv2_final.pth"
     torch.save(model.state_dict(), export_path)
     print("Model saved as deeplabv2_final.pth")
+
+##################
+# TESTING FUNCTION
+##################
 
 def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
     # Set the environment variable for PyTorch CUDA memory allocation
@@ -269,3 +275,83 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
     flops = FlopCountAnalysis(model, dummy_input)
     print(flop_count_table(flops))
     print(f"Total FLOPs: {flops.total() / 1e9:.2f} GFLOPs")
+
+##################
+# TRAINING BISENET
+##################
+
+from models.bisenet.build_bisenet import BiSeNet
+
+def bisenet_train(dataset_path, workspace_path, num_epochs=50, batch_size=2, context_path='resnet18'):
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    #####################
+    # SETUP TRAINING DATA
+    #####################
+    image_dir = os.path.join(dataset_path, "images/train")
+    label_dir = os.path.join(dataset_path, "gtFine/train")
+    input_transform = transforms.Compose([
+        transforms.Resize((512, 1024)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+    target_transform = transforms.Compose([
+        transforms.Resize((512, 1024), interpolation=Image.NEAREST),
+        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long()),
+    ])
+    dataset = CityScapesSegmentation(
+        image_dir=image_dir,
+        label_dir=label_dir,
+        transform=input_transform,
+        target_transform=target_transform,
+    )
+
+    # Weighting the class frequencies
+    class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+    class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
+
+    #####################
+    # PREPARING THE MODEL
+    #####################
+    # Define the loader
+    max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
+    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
+
+    # Build BiSeNet model
+    model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
+    model = model.to(device)
+
+    criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    scaler = GradScaler(enabled=True) # AMP
+
+    ###############
+    # TRAINING LOOP
+    ###############
+    for epoch in range(num_epochs):
+        model.train()
+        for images, labels in train_loader:
+            images, labels = images.to(device), labels.to(device)
+            optimizer.zero_grad()
+            with autocast(device_type="cuda", enabled=True):
+                outputs = model(images)
+                # BiSeNet returns (main, aux1, aux2) in train mode
+                if isinstance(outputs, (tuple, list)) and len(outputs) == 3:
+                    main_out, aux1, aux2 = outputs
+                    loss = criterion(main_out, labels) + 0.4 * criterion(aux1, labels) + 0.4 * criterion(aux2, labels)
+                else:
+                    loss = criterion(outputs, labels)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        # Save model checkpoint
+        if epoch % 2 == 0:
+            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_epoch_{epoch}.pth")
+            torch.save(model.state_dict(), checkpoint_file)
+            print(f"BiSeNet model saved at epoch {epoch}")
+
+    # Save final model
+    export_path = os.path.join(workspace_path, "export/bisenet_final.pth")
+    torch.save(model.state_dict(), export_path)
+    print("BiSeNet model saved as bisenet_final.pth")
