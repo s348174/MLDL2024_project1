@@ -511,13 +511,6 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     plt.title("First label in the dataset")
     plt.axis("off")
     plt.show()
-    # Display the first image-label pair
-    first_image, first_label = dataset[0]
-    fig = make_subplots(rows=1, cols=2, subplot_titles=("First Image", "First Label"))
-    fig.add_trace(go.Image(z=TF.to_pil_image(first_image.cpu())), row=1, col=1)
-    fig.add_trace(go.Image(z=TF.to_pil_image(first_label.cpu())), row=1, col=2)
-    fig.update_layout(title_text="First Image-Label Pair", width=800, height=400)
-    fig.show()
 
     #####################
     # PREPARING THE MODEL
