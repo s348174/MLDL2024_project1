@@ -1,5 +1,3 @@
-# TODO: Define here your training and validation loops.
-
 import torch
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
