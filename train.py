@@ -18,7 +18,7 @@ import os
 from PIL import Image
 from tempfile import TemporaryDirectory
 from torchvision.transforms import functional as TF
-from utils import fast_hist, per_class_iou, convert_label_ids_to_train_ids, compute_class_weights
+from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
@@ -114,6 +114,11 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     # Initialize GradScaler for mixed precision training
     scaler = GradScaler(enabled=True) # It makes the training faster by implementing AMP
 
+    # Polynomial learning rate
+    init_lr = 1e-4
+    max_iter = num_epochs * len(train_loader)
+    current_iter = 0
+
     ###############
     # TRAINING LOOP
     ###############
@@ -136,6 +141,8 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
             scaler.step(optimizer)
             scaler.update() # Update the weights
 
+            poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
+            current_iter += 1
             #loss.backward()
             #optimizer.step()
 
@@ -328,6 +335,11 @@ def bisenet_train(dataset_path, workspace_path, num_epochs=50, batch_size=2, con
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = GradScaler(enabled=True) # AMP
 
+    # Polynomial learning rate decay
+    init_lr = 1e-4
+    max_iter = num_epochs * len(train_loader)
+    current_iter = 0
+
     ###############
     # TRAINING LOOP
     ###############
@@ -347,6 +359,9 @@ def bisenet_train(dataset_path, workspace_path, num_epochs=50, batch_size=2, con
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
+
+            poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
+            current_iter += 1
         # Save model checkpoint
         if epoch % 2 == 0:
             checkpoint_file = os.path.join(workspace_path, f"export/bisenet_epoch_{epoch}.pth")
@@ -527,6 +542,11 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = GradScaler(enabled=True) # AMP
 
+    # Polynomial learning rate decay
+    init_lr = 1e-4
+    max_iter = num_epochs * len(train_loader)
+    current_iter = 0
+
     ###############
     # TRAINING LOOP
     ###############
@@ -546,6 +566,9 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
+
+            poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
+            current_iter += 1
         # Save model checkpoint
         if epoch % 2 == 0:
             checkpoint_file = os.path.join(workspace_path, f"export/bisenet_on_gta_epoch_{epoch}.pth")
