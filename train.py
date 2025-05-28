@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 #from datasets.cityscapes import CityScapesSegmentation #select this for local
 from cityscapes import CityScapesSegmentation #select this for colab
-from datasets.gta5 import GTA5 #select this for local
+#from datasets.gta5 import GTA5 #select this for local
+from gta5 import GTA5 #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -517,7 +518,7 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     fig.add_trace(go.Image(z=TF.to_pil_image(first_label.cpu())), row=1, col=2)
     fig.update_layout(title_text="First Image-Label Pair", width=800, height=400)
     fig.show()
-    
+
     #####################
     # PREPARING THE MODEL
     #####################
