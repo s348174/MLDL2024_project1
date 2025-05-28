@@ -147,9 +147,9 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     torch.save(model.state_dict(), export_path)
     print("Model saved as deeplabv2_final.pth")
 
-##################
-# TESTING FUNCTION
-##################
+#################
+# TESTING DEEPLAB
+#################
 
 def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
     # Set the environment variable for PyTorch CUDA memory allocation
@@ -205,7 +205,7 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
     #######################
     # MODEL EVALUATION LOOP
     #######################
-    print("Running inference...")
+    print("Running Deeplab inference...")
     with torch.no_grad():
         for i, (image, label) in enumerate(test_loader):
             image, label = image.to(device), label.to(device)
@@ -355,3 +355,103 @@ def bisenet_train(dataset_path, workspace_path, num_epochs=50, batch_size=2, con
     export_path = os.path.join(workspace_path, "export/bisenet_final.pth")
     torch.save(model.state_dict(), export_path)
     print("BiSeNet model saved as bisenet_final.pth")
+
+#################
+# TESTING BISENET
+#################
+
+def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet18'):
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    #################
+    # SETUP TEST DATA
+    #################
+    # Paths to the test dataset
+    image_dir = os.path.join(dataset_path, "images/val")
+    label_dir = os.path.join(dataset_path, "gtFine/val")
+    input_transform = transforms.Compose([
+        transforms.Resize((512, 1024)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+    target_transform = transforms.Compose([
+        transforms.Resize((512, 1024), interpolation=Image.NEAREST),
+        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long()),
+    ])
+    test_dataset = CityScapesSegmentation(
+        image_dir=image_dir,
+        label_dir=label_dir,
+        transform=input_transform,
+        target_transform=target_transform
+    )
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+
+    # Load BiSeNet model
+    model = BiSeNet(num_classes=num_classes, context_path=context_path)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model = model.to(device)
+    model.eval()
+
+    ########################
+    # METRICS INIZIALIZATION
+    ########################
+    correct_pixels = 0
+    total_pixels = 0
+    hist = np.zeros((num_classes, num_classes))
+    latency = []
+    fps = []
+
+    #######################
+    # MODEL EVALUATION LOOP
+    #######################
+    print("Running BiSeNet inference...")
+    with torch.no_grad():
+        for i, (image, label) in enumerate(test_loader):
+            image, label = image.to(device), label.to(device)
+            start_time = time.time()
+            output = model(image)
+            if isinstance(output, (tuple, list)):
+                output = output[0]  # Use main output if model returns aux outputs
+            pred = torch.argmax(output, dim=1).squeeze(0)
+            end_time = time.time()
+
+            pred_flat = pred.view(-1)
+            label_flat = label.view(-1)
+            mask = label_flat != 255
+            correct = (pred_flat[mask] == label_flat[mask]).sum().item()
+            total = mask.sum().item()
+            correct_pixels += correct
+            total_pixels += total
+            hist += fast_hist(label_flat.cpu().numpy(), pred_flat.cpu().numpy(), num_classes)
+            latency_i = end_time - start_time
+            latency.append(latency_i)
+            fps_i = 1 / latency_i
+            fps.append(fps_i)
+            if i % 10 == 0:
+                print(f"Iteration {i}/{len(test_loader)}, Latency: {latency_i:.4f}s, FPS: {fps_i:.2f}")
+
+    ####################
+    # AFTER LOOP METRICS
+    ####################
+    accuracy = correct_pixels / total_pixels
+    print(f"\nPixel Accuracy: {accuracy * 100:.2f}%")
+    iou_per_class = per_class_iou(hist)
+    mean_iou = np.nanmean(iou_per_class)
+    print(f"Per-class IoU: {iou_per_class}")
+    print(f"Mean IoU: {mean_iou}")
+    mean_latency = np.mean(latency) * 1000
+    std_latency = np.std(latency) * 1000
+    mean_fps = np.mean(fps)
+    std_fps = np.std(fps)
+    print(f"Mean Latency: {mean_latency:.2f} ms")
+    print(f"Latency Std Dev: {std_latency:.2f} ms")
+    print(f"Mean FPS: {mean_fps:.2f}")
+    print(f"FPS Std Dev: {std_fps:.2f}")
+
+    # FLOP calculations
+    height, width = 512, 1024
+    dummy_input = torch.zeros((1, 3, height, width)).to(device)
+    flops = FlopCountAnalysis(model, dummy_input)
+    print(flop_count_table(flops))
+    print(f"Total FLOPs: {flops.total() / 1e9:.2f} GFLOPs")
