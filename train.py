@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 #from datasets.cityscapes import CityScapesSegmentation #select this for local
 from cityscapes import CityScapesSegmentation #select this for colab
+from datasets.gta5 import GTA5 #select this for local
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -455,3 +456,109 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
     flops = FlopCountAnalysis(model, dummy_input)
     print(flop_count_table(flops))
     print(f"Total FLOPs: {flops.total() / 1e9:.2f} GFLOPs")
+
+##########################
+# TRAINING BISENET ON GTA5
+##########################
+def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, context_path='resnet18'):
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    #####################
+    # SETUP TRAINING DATA
+    #####################
+    image_dir = os.path.join(dataset_path, "images/")
+    label_dir = os.path.join(dataset_path, "labels/")
+    input_transform = transforms.Compose([
+        transforms.Resize((720, 1280)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+    target_transform = transforms.Compose([
+        transforms.Resize((720, 1280), interpolation=Image.NEAREST),
+        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long()),
+    ])
+    dataset = GTA5(
+        image_dir=image_dir,
+        label_dir=label_dir,
+        transform=input_transform,
+        target_transform=target_transform,
+    )
+
+    # Weighting the class frequencies
+    class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+    class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
+
+    #######################
+    # DATASET VISUALIZATION
+    #######################
+    # Visualize the training data
+    class_names = dataset.classes
+    print(f"Class names: {class_names}")
+    print(f"Number of classes:", dataset.num_classes)
+    print(f"Number of training samples: {len(dataset.images)}")
+    print(f"Number of labels: {len(dataset.labels)}")
+    # Display the first image in the dataset
+    image = Image.open(dataset.images[0])
+    plt.imshow(image)
+    plt.title("First image in the dataset")
+    plt.axis("off")
+    plt.show()
+    # Display the first label in the dataset
+    label = Image.open(dataset.labels[0])
+    plt.imshow(label)
+    plt.title("First label in the dataset")
+    plt.axis("off")
+    plt.show()
+    # Display the first image-label pair
+    first_image, first_label = dataset[0]
+    fig = make_subplots(rows=1, cols=2, subplot_titles=("First Image", "First Label"))
+    fig.add_trace(go.Image(z=TF.to_pil_image(first_image.cpu())), row=1, col=1)
+    fig.add_trace(go.Image(z=TF.to_pil_image(first_label.cpu())), row=1, col=2)
+    fig.update_layout(title_text="First Image-Label Pair", width=800, height=400)
+    fig.show()
+    
+    #####################
+    # PREPARING THE MODEL
+    #####################
+    # Define the loader
+    max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
+    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
+
+    # Build BiSeNet model
+    model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
+    model = model.to(device)
+
+    criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    scaler = GradScaler(enabled=True) # AMP
+
+    ###############
+    # TRAINING LOOP
+    ###############
+    for epoch in range(num_epochs):
+        model.train()
+        for images, labels in train_loader:
+            images, labels = images.to(device), labels.to(device)
+            optimizer.zero_grad()
+            with autocast(device_type="cuda", enabled=True):
+                outputs = model(images)
+                # BiSeNet returns (main, aux1, aux2) in train mode
+                if isinstance(outputs, (tuple, list)) and len(outputs) == 3:
+                    main_out, aux1, aux2 = outputs
+                    loss = criterion(main_out, labels) + 0.4 * criterion(aux1, labels) + 0.4 * criterion(aux2, labels)
+                else:
+                    loss = criterion(outputs, labels)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        # Save model checkpoint
+        if epoch % 2 == 0:
+            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_on_gta_epoch_{epoch}.pth")
+            torch.save(model.state_dict(), checkpoint_file)
+            print(f"BiSeNet model saved at epoch {epoch}")
+
+    # Save final model
+    export_path = os.path.join(workspace_path, "export/bisenet_on_gta_final.pth")
+    torch.save(model.state_dict(), export_path)
+    print("BiSeNet model saved as bisenet_final.pth")

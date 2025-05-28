@@ -86,7 +86,6 @@ class CityScapesSegmentation(Dataset):
             label = self.target_transform(label)
         else:
             label = torch.from_numpy(np.array(label)).long()
-
         return image, label
 
     def __len__(self):
