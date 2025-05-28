@@ -485,7 +485,7 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     label_dir = os.path.join(dataset_path, "labels/")
     input_transform = transforms.Compose([
         transforms.Resize((720, 1280)),
-        #transforms.ToTensor(),
+        transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
     target_transform = transforms.Compose([
