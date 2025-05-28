@@ -361,7 +361,7 @@ def bisenet_train(dataset_path, workspace_path, num_epochs=50, batch_size=2, con
             poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
             current_iter += 1
         # Save model checkpoint
-        if epoch % 2 == 0:
+        if epoch % 5 == 0:
             checkpoint_file = os.path.join(workspace_path, f"export/bisenet_epoch_{epoch}.pth")
             torch.save(model.state_dict(), checkpoint_file)
             print(f"BiSeNet model saved at epoch {epoch}")
