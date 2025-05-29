@@ -530,7 +530,9 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     #####################
     # Define the loader
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
+    # pin_memory=True is beneficial for GPU training as it speeds up data transfer to CUDA memory.
+    # It is not necessary for CPU-only training and can be omitted in such cases.
+    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
 
     # Build BiSeNet model
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
@@ -544,6 +546,8 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     init_lr = 1e-4
     max_iter = num_epochs * len(train_loader)
     current_iter = 0
+    # Enable anomaly detection for debugging purposes; disable in production for better performance
+    torch.autograd.set_detect_anomaly(True)
 
     ###############
     # TRAINING LOOP
@@ -564,9 +568,9 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-
-            poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
-            current_iter += 1
+        # Update polynomial loss scheduler
+        poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
+        current_iter += 1
         # Save model checkpoint
         if epoch % 2 == 0:
             checkpoint_file = os.path.join(workspace_path, f"export/bisenet_on_gta_epoch_{epoch}.pth")
