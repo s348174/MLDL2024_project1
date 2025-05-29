@@ -547,7 +547,7 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     max_iter = num_epochs * len(train_loader)
     current_iter = 0
     # Enable anomaly detection for debugging purposes; disable in production for better performance
-    torch.autograd.set_detect_anomaly(True)
+    #torch.autograd.set_detect_anomaly(True)
 
     ###############
     # TRAINING LOOP
@@ -568,9 +568,9 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-        # Update polynomial loss scheduler
-        poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
-        current_iter += 1
+            # Update polynomial loss scheduler
+            poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
+            current_iter += 1
         # Save model checkpoint
         if epoch % 2 == 0:
             checkpoint_file = os.path.join(workspace_path, f"export/bisenet_on_gta_epoch_{epoch}.pth")
