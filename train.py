@@ -2,10 +2,10 @@ import torch
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from datasets.cityscapes import CityScapesSegmentation #select this for local
-#from cityscapes import CityScapesSegmentation #select this for colab
-from datasets.gta5 import GTA5 #select this for local
-#from gta5 import GTA5 #select this for colab
+#from datasets.cityscapes import CityScapesSegmentation #select this for local
+from cityscapes import CityScapesSegmentation #select this for colab
+#from datasets.gta5 import GTA5 #select this for local
+from gta5 import GTA5 #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
