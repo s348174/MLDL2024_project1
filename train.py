@@ -16,7 +16,7 @@ import os
 from PIL import Image
 from tempfile import TemporaryDirectory
 from torchvision.transforms import functional as TF
-from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler, convert_gta5_rgb_to_trainid
+from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler, convert_gta5_rgb_to_trainid, compute_gta5_class_weights
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
@@ -499,9 +499,24 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
         target_transform=target_transform,
     )
 
+    # --- Add this block here ---
+    N = 10
+    for i in range(N):
+        label_path = dataset.labels[i]
+        label_img = Image.open(label_path).convert("RGB")
+        label_np = convert_gta5_rgb_to_trainid(label_img)
+        unique, counts = np.unique(label_np, return_counts=True)
+        print(f"GTA5 Sample {i}: {dict(zip(unique, counts))}")
+    # ---------------------------
+
     # Weighting the class frequencies
-    class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+    class_weights_dict = compute_gta5_class_weights(label_dir, num_classes=dataset.num_classes)
     class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
+    for class_idx, freq in class_weights_dict.items():
+        print(f"Metric {class_idx}:")
+        for i in range(len(freq)):
+            print(f"Class {i}: {freq[i]}; ")
+        print("\n")
 
     #######################
     # DATASET VISUALIZATION
@@ -538,7 +553,8 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
     model = model.to(device)
 
-    criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
+    #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
+    criterion = torch.nn.CrossEntropyLoss( ignore_index=255) # No weights
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = GradScaler(enabled=True) # AMP
 

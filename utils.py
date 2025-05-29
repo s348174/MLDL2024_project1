@@ -42,6 +42,10 @@ import os
 from PIL import Image
 from tqdm import tqdm
 
+############
+# CITYSCAPES
+############
+
 def convert_label_ids_to_train_ids(label_np):
     # labelId to trainId mapping
     LABEL_TO_TRAINID = {
@@ -110,6 +114,10 @@ def compute_class_weights(label_dir, num_classes=19):
         'median_freq_balanced': median_freq_balanced,
     }
 
+######
+# GTA5
+######
+
 # GTA5 color to trainId mapping (Cityscapes order)
 GTA5_COLOR_TO_TRAINID = {
     (128, 64, 128): 0,    # road
@@ -144,8 +152,51 @@ def convert_gta5_rgb_to_trainid(label_img):
     if not isinstance(label_img, np.ndarray):
         label_img = np.array(label_img)
     h, w, _ = label_img.shape
+    # Initialize label_id with 255, which represents the ignored class
     label_id = 255 * np.ones((h, w), dtype=np.uint8)
     for color, train_id in GTA5_COLOR_TO_TRAINID.items():
         mask = np.all(label_img == color, axis=-1)
         label_id[mask] = train_id
     return label_id
+
+def compute_gta5_class_weights(label_dir, num_classes=19):
+    """
+    Computes class pixel frequencies and balancing weights for GTA5 dataset.
+    Args:
+        label_dir (str): Directory containing all GTA5 label images (RGB).
+        num_classes (int): Number of valid training classes.
+    Returns:
+        dict with:
+            - raw_counts
+            - freqs
+            - inv_freqs
+            - median_freq_balanced
+    """
+    class_counts = np.zeros(num_classes, dtype=np.int64)
+    label_paths = [os.path.join(label_dir, f) for f in os.listdir(label_dir) if f.endswith('.png')]
+
+    if len(label_paths) == 0:
+        raise ValueError(f"No label files found in {label_dir}")
+
+    for label_path in tqdm(label_paths, desc="Computing GTA5 class frequencies"):
+        label_img = Image.open(label_path).convert('RGB')  # Ensure it's in RGB format
+        label_np = convert_gta5_rgb_to_trainid(label_img)
+        for class_id in range(num_classes):
+            class_counts[class_id] += np.sum(label_np == class_id)
+
+    # Avoid divide-by-zero
+    class_counts[class_counts == 0] = 1
+
+    total_pixels = np.sum(class_counts)
+    freqs = class_counts / total_pixels
+    inv_freqs = 1.0 / freqs
+    class_frequencies = class_counts / class_counts.sum()
+    median = np.median(class_frequencies)
+    median_freq_balanced = median / class_frequencies
+
+    return {
+        'raw_counts': class_counts,
+        'freqs': freqs,
+        'inv_freqs': inv_freqs,
+        'median_freq_balanced': median_freq_balanced,
+    }
