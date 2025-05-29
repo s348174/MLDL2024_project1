@@ -2,10 +2,10 @@ import torch
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
 from torchvision import transforms
-#from datasets.cityscapes import CityScapesSegmentation #select this for local
-from cityscapes import CityScapesSegmentation #select this for colab
-#from datasets.gta5 import GTA5 #select this for local
-from gta5 import GTA5 #select this for colab
+from datasets.cityscapes import CityScapesSegmentation #select this for local
+#from cityscapes import CityScapesSegmentation #select this for colab
+from datasets.gta5 import GTA5 #select this for local
+#from gta5 import GTA5 #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -16,7 +16,7 @@ import os
 from PIL import Image
 from tempfile import TemporaryDirectory
 from torchvision.transforms import functional as TF
-from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler
+from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler, convert_gta5_rgb_to_trainid
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
@@ -481,8 +481,8 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     #####################
     # SETUP TRAINING DATA
     #####################
-    image_dir = os.path.join(dataset_path, "images/")
-    label_dir = os.path.join(dataset_path, "labels/")
+    image_dir = dataset_path + "/images"
+    label_dir = dataset_path + "/labels"
     input_transform = transforms.Compose([
         transforms.Resize((720, 1280)),
         transforms.ToTensor(),
@@ -490,7 +490,7 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     ])
     target_transform = transforms.Compose([
         transforms.Resize((720, 1280), interpolation=Image.NEAREST),
-        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long()),
+        transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long()),
     ])
     dataset = GTA5(
         image_dir=image_dir,

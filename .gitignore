@@ -1,5 +1,6 @@
 # Ignora completamente le directory
 datasets/Cityscapes/
+datasets/GTA5/
 pyenv/
 export/
 __pycache__/

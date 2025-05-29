@@ -1,4 +1,4 @@
-from train import deeplab_train, deeplab_test, bisenet_test
+from train import deeplab_train, deeplab_test, bisenet_test, bisenet_on_gta
 from utils import compute_class_weights
 import os
 
@@ -11,7 +11,11 @@ num_epochs = 1
 
 model_path = workspace_path + "/export/bisenet_final_balanced.pth"
 #deeplab_test(dataset_path_emanuele, model_path)
-bisenet_test(dataset_path_alberto, model_path)
+#bisenet_test(dataset_path_alberto, model_path)
+
+gta_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/GTA5"
+
+bisenet_on_gta(gta_path, workspace_path, num_epochs)
 
 
 

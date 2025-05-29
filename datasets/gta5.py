@@ -16,8 +16,8 @@ class GTA5(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.classes = [
-            'road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light',
-            'traffic sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
+            'road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'light',
+            'sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
             'truck', 'bus', 'train', 'motorcycle', 'bicycle'
         ]
         self.num_classes = len(self.classes)
@@ -41,7 +41,7 @@ class GTA5(Dataset):
 
     def __getitem__(self, idx):
         image = Image.open(self.images[idx]).convert("RGB")
-        label = Image.open(self.labels[idx])
+        label = Image.open(self.labels[idx]).convert("RGB")
         if self.transform:
             image = self.transform(image)
         if self.target_transform:

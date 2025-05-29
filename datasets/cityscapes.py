@@ -45,8 +45,8 @@ class CityScapesSegmentation(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.classes = [
-            'road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light',
-            'traffic sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
+            'road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'light',
+            'sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
             'truck', 'bus', 'train', 'motorcycle', 'bicycle'
         ]
         self.num_classes = len(self.classes)
