@@ -609,7 +609,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     ###############
     # TRAINING LOOP
     ###############
-    for epoch in range(num_epochs):
+    for epoch in range(current_epoch, num_epochs - current_epoch):
         model.train()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
