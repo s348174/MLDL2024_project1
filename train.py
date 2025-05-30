@@ -336,8 +336,8 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
 
     # Resuming checkpoint if available
     print("BiSeNet pretrain loading...")
+    saved_state_dict = torch.load(pretrained_path, map_location=device)
     if checkpoint:
-        saved_state_dict = torch.load(pretrained_path, map_location=device)
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
@@ -345,7 +345,14 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
-        model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
+        #model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
+        # If the model was trained with a different architecture, we need to adapt the state_dict
+        # This is a workaround to load the pretrained weights into the model
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            i_parts = i.split('.')
+            new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+        model.load_state_dict(new_params, strict=False)
         print("Starting training from scratch with pretrained weights")
     
     # Move model to device
@@ -581,9 +588,9 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     scaler = GradScaler(enabled=True) # AMP
 
     # Resuming checkpoint if available
-    print("BiSeNet on GTA5 pretrain loading...")
+    print("BiSeNet pretrain loading...")
+    saved_state_dict = torch.load(pretrained_path, map_location=device)
     if checkpoint:
-        saved_state_dict = torch.load(pretrained_path, map_location=device)
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
@@ -591,13 +598,20 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
-        model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
+        #model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
+        # If the model was trained with a different architecture, we need to adapt the state_dict
+        # This is a workaround to load the pretrained weights into the model
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            i_parts = i.split('.')
+            new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+        model.load_state_dict(new_params, strict=False)
         print("Starting training from scratch with pretrained weights")
 
     # Move model to device
     print("Moving model to device...")
     model = model.to(device)
-    
+
     # Polynomial learning rate decay
     init_lr = 1e-4
     max_iter = num_epochs * len(train_loader)
