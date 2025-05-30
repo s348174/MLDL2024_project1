@@ -162,7 +162,7 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
             current_iter += 1
 
         # Save model checkpoint
-        if epoch % 2 == 0:
+        if epoch % 5 == 0:
             checkpoint_file = workspace_path + "/export/deeplabv2_epoch_{}.pth".format(epoch)
             torch.save({
                 'model_state_dict': model.state_dict(),
