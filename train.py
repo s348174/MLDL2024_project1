@@ -327,7 +327,6 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
 
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
-    model = model.to(device)
 
     # Initialize loss function and optimizer
     #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
@@ -349,6 +348,10 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
         model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
         print("Starting training from scratch with pretrained weights")
     
+    # Move model to device
+    print("Moving model to device...")
+    model = model.to(device)
+
     # Polynomial learning rate decay
     init_lr = 1e-4
     max_iter = num_epochs * len(train_loader)
@@ -570,14 +573,6 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
 
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
-    print("BiSeNet pretrain loading...")
-    saved_state_dict = torch.load(pretrained_path, map_location=device)
-    new_params = model.state_dict().copy()
-    for i in saved_state_dict:
-        i_parts = i.split('.')
-        new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-    model.load_state_dict(new_params, strict=False)
-    model = model.to(device)
 
     # Initialize loss function and optimizer
     #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
@@ -586,7 +581,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     scaler = GradScaler(enabled=True) # AMP
 
     # Resuming checkpoint if available
-    print("BiSeNet pretrain loading...")
+    print("BiSeNet on GTA5 pretrain loading...")
     if checkpoint:
         saved_state_dict = torch.load(pretrained_path, map_location=device)
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
@@ -599,6 +594,10 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
         print("Starting training from scratch with pretrained weights")
 
+    # Move model to device
+    print("Moving model to device...")
+    model = model.to(device)
+    
     # Polynomial learning rate decay
     init_lr = 1e-4
     max_iter = num_epochs * len(train_loader)
@@ -630,8 +629,14 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
             current_iter += 1
         # Save model checkpoint
         if epoch % 2 == 0:
-            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_on_gta_epoch_{epoch}.pth")
-            torch.save(model.state_dict(), checkpoint_file)
+            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_epoch_{epoch}.pth")
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'epoch': epoch,
+                'scaler': scaler.state_dict(),    # If using AMP
+                # 'loss': loss_value,             # Optional
+            }, checkpoint_file)
             print(f"BiSeNet model saved at epoch {epoch}")
 
     # Save final model
