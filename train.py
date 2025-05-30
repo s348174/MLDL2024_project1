@@ -289,7 +289,7 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
 
 from models.bisenet.build_bisenet import BiSeNet
 
-def bisenet_train(dataset_path, workspace_path, pretrained_path, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=False, num_epochs=50, batch_size=2, context_path='resnet18'):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -327,21 +327,28 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, num_epochs=50, 
 
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
-    print("BiSeNet pretrain loading...")
-    saved_state_dict = torch.load(pretrained_path, map_location=device)
-    model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
     model = model.to(device)
 
     # Initialize loss function and optimizer
     #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
     criterion = torch.nn.CrossEntropyLoss( ignore_index=255) # No weights
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
     scaler = GradScaler(enabled=True) # AMP
-    scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
-    current_epoch = saved_state_dict.get('epoch', 0)  # Get current epoch from saved state
-    print(f"Resuming training from epoch {current_epoch}")
 
+    # Resuming checkpoint if available
+    print("BiSeNet pretrain loading...")
+    if checkpoint:
+        saved_state_dict = torch.load(pretrained_path, map_location=device)
+        model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
+        optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
+        scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
+        current_epoch = saved_state_dict.get('epoch', 0)  # Get current epoch from saved state
+        print(f"Resuming training from epoch {current_epoch}")
+    else:
+        current_epoch = 0
+        model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
+        print("Starting training from scratch with pretrained weights")
+    
     # Polynomial learning rate decay
     init_lr = 1e-4
     max_iter = num_epochs * len(train_loader)
@@ -489,7 +496,7 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
 ##########################
 # TRAINING BISENET ON GTA5
 ##########################
-def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=False, num_epochs=50, batch_size=2, context_path='resnet18'):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -514,7 +521,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, num_epochs=50,
         target_transform=target_transform,
     )
 
-    # --- Add this block here ---
+    # --- Add this block here to check pixels labels in sample images ---
     N = 10
     for i in range(N):
         label_path = dataset.labels[i]
@@ -527,12 +534,8 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, num_epochs=50,
     # Weighting the class frequencies
     class_weights_dict = compute_gta5_class_weights(label_dir, num_classes=dataset.num_classes)
     class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
-    for class_idx, freq in class_weights_dict.items():
-        print(f"Metric {class_idx}:")
-        for i in range(len(freq)):
-            print(f"Class {i}: {freq[i]}; ")
-        print("\n")
 
+    """
     #######################
     # DATASET VISUALIZATION
     #######################
@@ -554,6 +557,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, num_epochs=50,
     plt.title("First label in the dataset")
     plt.axis("off")
     plt.show()
+    """
 
     #####################
     # PREPARING THE MODEL
@@ -580,6 +584,20 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, num_epochs=50,
     criterion = torch.nn.CrossEntropyLoss( ignore_index=255) # No weights
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = GradScaler(enabled=True) # AMP
+
+    # Resuming checkpoint if available
+    print("BiSeNet pretrain loading...")
+    if checkpoint:
+        saved_state_dict = torch.load(pretrained_path, map_location=device)
+        model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
+        optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
+        scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
+        current_epoch = saved_state_dict.get('epoch', 0)  # Get current epoch from saved state
+        print(f"Resuming training from epoch {current_epoch}")
+    else:
+        current_epoch = 0
+        model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
+        print("Starting training from scratch with pretrained weights")
 
     # Polynomial learning rate decay
     init_lr = 1e-4
