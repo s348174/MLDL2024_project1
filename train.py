@@ -26,7 +26,7 @@ from torch.amp import autocast, GradScaler
 # TRAINIG DEEPLAB
 #################
 
-def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epochs=50, batch_size=4): 
+def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2): 
     # Set the environment variable for PyTorch CUDA memory allocation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
@@ -64,10 +64,6 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
         target_transform=target_transform,   
     )
 
-    #evaluate the class weights based on frequencies
-    class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
-    class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
-
     #######################
     # DATASET VISUALIZATION
     #######################
@@ -87,20 +83,30 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     #####################
     # PREPARING THE MODEL
     #####################
+    # Resuming information on eventual checkpoint
+    saved_state_dict = torch.load(pretrain_imagenet_path, map_location=device)
+    if saved_state_dict['balanced']:
+        balanced = True
+        print("Training with balanced class weights")
+
     # Define the loader
+    batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers) 
     print(f"Using {batch_size} as batch size.")
     print(f"Using {max_num_workers} workers for data loading.")
-
+        
     # Load the model
-    model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_imagenet_path) #the baseline for semantic segmentation
-    #model = ResNetMulti(num_classes=len(class_names), pretrained=True, pretrain_path=pretrain_imagenet_path)
-    model = model.to(device)
+    model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=saved_state_dict['model_state_dict']) # The baseline for semantic segmentation
 
     # Define loss function
-    criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # normalized weights for each class
-    #criterion = torch.nn.CrossEntropyLoss(ignore_index=255) #default
+    if balanced: 
+        # Evaluate the class weights based on frequencies
+        class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+        class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
+        criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
+    else:
+        criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
     #criterion = torch.nn.BCEWithLogitsLoss()
     #criterion = torch.nn.MSELoss()
 
@@ -112,15 +118,28 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
     # Initialize GradScaler for mixed precision training
     scaler = GradScaler(enabled=True) # It makes the training faster by implementing AMP
 
+    # Resuming checkpoint if available
+    if checkpoint:
+        optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
+        scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
+        current_epoch = saved_state_dict.get('epoch', 0)  # Get current epoch from saved state
+        print(f"Resuming training from epoch {current_epoch}")
+    else:
+        current_epoch = 0
+
+    # Move model to device
+    print("Moving model to device...")
+    model = model.to(device)
+
     # Polynomial learning rate
     init_lr = 1e-4
-    max_iter = num_epochs * len(train_loader)
-    current_iter = 0
+    max_iter = (num_epochs-current_epoch) * len(train_loader)
+    current_iter = saved_state_dict['current_lr_iter'] if checkpoint else 0
 
     ###############
     # TRAINING LOOP
     ###############
-    for epoch in range(num_epochs):
+    for epoch in range(current_epoch, num_epochs-current_epoch):
         model.train()
         for images, labels in train_loader: # For each batch
             images, labels = images.to(device), labels.to(device) # It takes images and labels from the dataloader
@@ -141,17 +160,29 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, num_epoc
 
             poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
             current_iter += 1
-            #loss.backward()
-            #optimizer.step()
 
         # Save model checkpoint
         if epoch % 2 == 0:
             checkpoint_file = workspace_path + "/export/deeplabv2_epoch_{}.pth".format(epoch)
-            torch.save(model.state_dict(), checkpoint_file)
-            print(f"Model saved at epoch {epoch}")
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scaler': scaler.state_dict(),    # If using AMP
+                'epoch': epoch,
+                'bacth_size': batch_size,  # Save the batch size for resuming training
+                'balanced': balanced,  # Save whether the model was trained with balanced class weights
+                'current_lr_iter': current_iter,  # Save the current iteration for learning rate scheduling
+                # 'loss': loss_value,             # Optional
+            }, checkpoint_file)
+            print(f"DeepLabv2 model saved at epoch {epoch}")
     # Save the model
     export_path = workspace_path + "/export/deeplabv2_final.pth"
-    torch.save(model.state_dict(), export_path)
+    torch.save({
+                'model_state_dict': model.state_dict(),
+                'epoch': num_epochs,
+                'batch_size': batch_size,  # Save the batch size
+                'balanced': balanced,  # Save whether the model was trained with balanced class weights
+               }, export_path)
     print("Model saved as deeplabv2_final.pth")
 
 #################
@@ -191,9 +222,11 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False) 
     # Batch_size = 1 so that prediction is done 1 sample at a time (necessary to saving segmentation masks) --> individual evaluation
 
+    # Load model info
+    saved_state_dict = torch.load(model_path, map_location=device)
     # Load model
     model = get_deeplab_v2(num_classes=num_classes, pretrain=False) # Pretrain is False because weights are inserted in the next line
-    model.load_state_dict(torch.load(model_path, map_location=device)) 
+    model.load_state_dict(saved_state_dict['model_state_dict'])  # Load the model state dict
     model = model.to(device)
     model.eval()
 
@@ -256,6 +289,7 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
     ####################
     # AFTER LOOP METRICS
     ####################
+    print(f"\nEvaluation complete on DeepLab with {saved_state_dict['epoch']} epochs, {saved_state_dict['batch_size']} batch size, and balanced={saved_state_dict['balanced']}.")
     # Calculate pixel accuracy
     accuracy = correct_pixels / total_pixels
     print(f"\nPixel Accuracy: {accuracy * 100:.2f}%")
@@ -289,7 +323,7 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
 
 from models.bisenet.build_bisenet import BiSeNet
 
-def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=False, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18'):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -314,23 +348,33 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
         target_transform=target_transform,
     )
 
-    # Weighting the class frequencies
-    class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
-    class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
-
     #####################
     # PREPARING THE MODEL
     #####################
+    # Resuming information on eventual checkpoint
+    saved_state_dict = torch.load(pretrained_path, map_location=device)
+    if saved_state_dict['balanced']:
+        balanced = True
+        print("Training with balanced class weights")
+
     # Define the loader
+    batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
 
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
 
-    # Initialize loss function and optimizer
-    #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
-    criterion = torch.nn.CrossEntropyLoss( ignore_index=255) # No weights
+    # Define loss function
+    if balanced: 
+        # Evaluate the class weights based on frequencies
+        class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+        class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
+        criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
+    else:
+        criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+
+    # Define optimizer and scaler
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = GradScaler(enabled=True) # AMP
 
@@ -361,8 +405,8 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
 
     # Polynomial learning rate decay
     init_lr = 1e-4
-    max_iter = num_epochs * len(train_loader)
-    current_iter = 0
+    max_iter = (num_epochs-current_epoch) * len(train_loader)
+    current_iter = saved_state_dict['current_lr_iter'] if checkpoint else 0
 
     ###############
     # TRAINING LOOP
@@ -392,15 +436,24 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'epoch': epoch,
                 'scaler': scaler.state_dict(),    # If using AMP
+                'epoch': epoch,
+                'bacth_size': batch_size,  # Save the batch size for resuming training
+                'balanced': balanced,  # Save whether the model was trained with balanced class weights
+                'current_lr_iter': current_iter,  # Save the current iteration for learning rate scheduling
                 # 'loss': loss_value,             # Optional
             }, checkpoint_file)
             print(f"BiSeNet model saved at epoch {epoch}")
 
     # Save final model
     export_path = os.path.join(workspace_path, "export/bisenet_final.pth")
-    torch.save(model.state_dict(), export_path)
+    torch.save({
+                'model_state_dict': model.state_dict(),
+                'epoch': num_epochs,
+                'batch_size': batch_size,  # Save the batch size
+                'balanced': balanced,  # Save whether the model was trained with balanced class weights
+                'context_path': context_path,  # Save the context path used
+               }, export_path)
     print("BiSeNet model saved as bisenet_final.pth")
 
 #################
@@ -434,9 +487,11 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
     )
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
+    # Load model info
+    saved_state_dict = torch.load(model_path, map_location=device)
     # Load BiSeNet model
     model = BiSeNet(num_classes=num_classes, context_path=context_path)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.load_state_dict(saved_state_dict['model_state_dict'])  # Load the model state dict
     model = model.to(device)
     model.eval()
 
@@ -481,6 +536,7 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
     ####################
     # AFTER LOOP METRICS
     ####################
+    print(f"\nEvaluation complete on BiseNet with {saved_state_dict['epoch']} epochs, {saved_state_dict['batch_size']} batch size, and balanced={saved_state_dict['balanced']}.")
     accuracy = correct_pixels / total_pixels
     print(f"\nPixel Accuracy: {accuracy * 100:.2f}%")
     iou_per_class = per_class_iou(hist)
@@ -506,7 +562,7 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
 ##########################
 # TRAINING BISENET ON GTA5
 ##########################
-def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=False, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18'):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -541,10 +597,6 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         print(f"GTA5 Sample {i}: {dict(zip(unique, counts))}")
     # ---------------------------
 
-    # Weighting the class frequencies
-    class_weights_dict = compute_gta5_class_weights(label_dir, num_classes=dataset.num_classes)
-    class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
-
     """
     #######################
     # DATASET VISUALIZATION
@@ -572,7 +624,14 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     #####################
     # PREPARING THE MODEL
     #####################
+    # Resuming information on eventual checkpoint
+    saved_state_dict = torch.load(pretrained_path, map_location=device)
+    if saved_state_dict['balanced']:
+        balanced = True
+        print("Training with balanced class weights")
+
     # Define the loader
+    batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     # pin_memory=True is beneficial for GPU training as it speeds up data transfer to CUDA memory.
     # It is not necessary for CPU-only training and can be omitted in such cases.
@@ -581,9 +640,16 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
 
-    # Initialize loss function and optimizer
-    #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
-    criterion = torch.nn.CrossEntropyLoss( ignore_index=255) # No weights
+    # Define loss function
+    if balanced: 
+        # Evaluate the class weights based on frequencies
+        class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+        class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
+        criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
+    else:
+        criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+
+    # Define optimizer and scaler
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = GradScaler(enabled=True) # AMP
 
@@ -613,10 +679,8 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
 
     # Polynomial learning rate decay
     init_lr = 1e-4
-    max_iter = num_epochs * len(train_loader)
-    current_iter = 0
-    # Enable anomaly detection for debugging purposes; disable in production for better performance
-    #torch.autograd.set_detect_anomaly(True)
+    max_iter = (num_epochs-current_epoch) * len(train_loader)
+    current_iter = saved_state_dict['current_lr_iter'] if checkpoint else 0
 
     ###############
     # TRAINING LOOP
@@ -640,19 +704,29 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
             # Update polynomial loss scheduler
             poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
             current_iter += 1
+
         # Save model checkpoint
         if epoch % 2 == 0:
-            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_epoch_{epoch}.pth")
+            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_gta_epoch_{epoch}.pth")
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'epoch': epoch,
                 'scaler': scaler.state_dict(),    # If using AMP
+                'epoch': epoch,
+                'bacth_size': batch_size,  # Save the batch size for resuming training
+                'balanced': balanced,  # Save whether the model was trained with balanced class weights
+                'current_lr_iter': current_iter,  # Save the current iteration for learning rate scheduling
                 # 'loss': loss_value,             # Optional
             }, checkpoint_file)
-            print(f"BiSeNet model saved at epoch {epoch}")
+            print(f"BiSeNet model on GTA saved at epoch {epoch}")
 
     # Save final model
     export_path = os.path.join(workspace_path, "export/bisenet_on_gta_final.pth")
-    torch.save(model.state_dict(), export_path)
+    torch.save({
+                'model_state_dict': model.state_dict(),
+                'epoch': num_epochs,
+                'batch_size': batch_size,  # Save the batch size
+                'balanced': balanced,  # Save whether the model was trained with balanced class weights
+                'context_path': context_path,  # Save the context path used
+               }, export_path)
     print("BiSeNet model saved as bisenet_final.pth")
