@@ -328,7 +328,7 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, num_epochs=50, 
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
     print("BiSeNet pretrain loading...")
-    saved_state_dict = torch.load(pretrained_path)
+    saved_state_dict = torch.load(pretrained_path, map_location=device)
     new_params = model.state_dict().copy()
     for i in saved_state_dict:
         i_parts = i.split('.')
@@ -561,7 +561,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, num_epochs=50,
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
     print("BiSeNet pretrain loading...")
-    saved_state_dict = torch.load(pretrained_path)
+    saved_state_dict = torch.load(pretrained_path, map_location=device)
     new_params = model.state_dict().copy()
     for i in saved_state_dict:
         i_parts = i.split('.')
