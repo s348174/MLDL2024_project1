@@ -329,18 +329,18 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, num_epochs=50, 
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
     print("BiSeNet pretrain loading...")
     saved_state_dict = torch.load(pretrained_path, map_location=device)
-    new_params = model.state_dict().copy()
-    for i in saved_state_dict:
-        i_parts = i.split('.')
-        new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-    model.load_state_dict(new_params, strict=False)
+    model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
     model = model.to(device)
 
     # Initialize loss function and optimizer
     #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
     criterion = torch.nn.CrossEntropyLoss( ignore_index=255) # No weights
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
     scaler = GradScaler(enabled=True) # AMP
+    scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
+    current_epoch = saved_state_dict.get('epoch', 0)  # Get current epoch from saved state
+    print(f"Resuming training from epoch {current_epoch}")
 
     # Polynomial learning rate decay
     init_lr = 1e-4
@@ -350,7 +350,7 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, num_epochs=50, 
     ###############
     # TRAINING LOOP
     ###############
-    for epoch in range(num_epochs):
+    for epoch in range(current_epoch, num_epochs - current_epoch):
         model.train()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
@@ -372,7 +372,13 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, num_epochs=50, 
         # Save model checkpoint
         if epoch % 5 == 0:
             checkpoint_file = os.path.join(workspace_path, f"export/bisenet_epoch_{epoch}.pth")
-            torch.save(model.state_dict(), checkpoint_file)
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'epoch': epoch,
+                'scaler': scaler.state_dict(),    # If using AMP
+                # 'loss': loss_value,             # Optional
+            }, checkpoint_file)
             print(f"BiSeNet model saved at epoch {epoch}")
 
     # Save final model
