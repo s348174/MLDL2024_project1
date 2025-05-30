@@ -85,20 +85,24 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
     #####################
     # Resuming information on eventual checkpoint
     saved_state_dict = torch.load(pretrain_imagenet_path, map_location=device)
-    if saved_state_dict['balanced']:
-        balanced = True
-        print("Training with balanced class weights")
+    if checkpoint:
+        if saved_state_dict['balanced']:
+            balanced = True
+            print("Training with balanced class weights")
 
     # Define the loader
-    batch_size = saved_state_dict['batch_size']
+    if checkpoint: batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers) 
     print(f"Using {batch_size} as batch size.")
     print(f"Using {max_num_workers} workers for data loading.")
         
     # Load the model
-    model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=saved_state_dict['model_state_dict']) # The baseline for semantic segmentation
-
+    if checkpoint:
+        model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=saved_state_dict['model_state_dict']) # The baseline for semantic segmentation
+    else:
+        model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_imagenet_path) # The baseline for semantic segmentation
+    
     # Define loss function
     if balanced: 
         # Evaluate the class weights based on frequencies
