@@ -289,7 +289,7 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
 
 from models.bisenet.build_bisenet import BiSeNet
 
-def bisenet_train(dataset_path, workspace_path, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_train(dataset_path, workspace_path, pretrained_path, num_epochs=50, batch_size=2, context_path='resnet18'):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -325,11 +325,20 @@ def bisenet_train(dataset_path, workspace_path, num_epochs=50, batch_size=2, con
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
 
-    # Build BiSeNet model
+    # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
+    print("BiSeNet pretrain loading...")
+    saved_state_dict = torch.load(pretrained_path)
+    new_params = model.state_dict().copy()
+    for i in saved_state_dict:
+        i_parts = i.split('.')
+        new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+    model.load_state_dict(new_params, strict=False)
     model = model.to(device)
 
-    criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
+    # Initialize loss function and optimizer
+    #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
+    criterion = torch.nn.CrossEntropyLoss( ignore_index=255) # No weights
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = GradScaler(enabled=True) # AMP
 
@@ -474,7 +483,7 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
 ##########################
 # TRAINING BISENET ON GTA5
 ##########################
-def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, num_epochs=50, batch_size=2, context_path='resnet18'):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -549,10 +558,18 @@ def bisenet_on_gta(dataset_path, workspace_path, num_epochs=50, batch_size=2, co
     # It is not necessary for CPU-only training and can be omitted in such cases.
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
 
-    # Build BiSeNet model
+    # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
+    print("BiSeNet pretrain loading...")
+    saved_state_dict = torch.load(pretrained_path)
+    new_params = model.state_dict().copy()
+    for i in saved_state_dict:
+        i_parts = i.split('.')
+        new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+    model.load_state_dict(new_params, strict=False)
     model = model.to(device)
 
+    # Initialize loss function and optimizer
     #criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
     criterion = torch.nn.CrossEntropyLoss( ignore_index=255) # No weights
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
