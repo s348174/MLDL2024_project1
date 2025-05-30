@@ -598,7 +598,6 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
-        #model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
         # If the model was trained with a different architecture, we need to adapt the state_dict
         # This is a workaround to load the pretrained weights into the model
         new_params = model.state_dict().copy()
