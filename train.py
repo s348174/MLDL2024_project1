@@ -86,6 +86,7 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
     # Resuming information on eventual checkpoint
     saved_state_dict = torch.load(pretrain_imagenet_path, map_location=device)
     if checkpoint:
+        batch_size = saved_state_dict['batch_size']
         if saved_state_dict['balanced']:
             balanced = True
             print("Training with balanced class weights")
@@ -126,7 +127,7 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
     if checkpoint:
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
-        current_epoch = saved_state_dict.get('epoch', 0)  # Get current epoch from saved state
+        current_epoch = saved_state_dict['epoch']  # Get current epoch from saved state
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
@@ -357,12 +358,14 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
     #####################
     # Resuming information on eventual checkpoint
     saved_state_dict = torch.load(pretrained_path, map_location=device)
-    if saved_state_dict['balanced']:
-        balanced = True
-        print("Training with balanced class weights")
+    if checkpoint:
+        batch_size = saved_state_dict['batch_size']
+        if saved_state_dict['balanced']:
+            balanced = True
+            print("Training with balanced class weights")
 
     # Define the loader
-    batch_size = saved_state_dict['batch_size']
+    if checkpoint: batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
 
@@ -389,11 +392,10 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
-        current_epoch = saved_state_dict.get('epoch', 0)  # Get current epoch from saved state
+        current_epoch = saved_state_dict['epoch']  # Get current epoch from saved state
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
-        #model.load_state_dict(torch.load(pretrained_path, map_location=device))  # Load pretrained weights
         # If the model was trained with a different architecture, we need to adapt the state_dict
         # This is a workaround to load the pretrained weights into the model
         new_params = model.state_dict().copy()
@@ -630,12 +632,14 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     #####################
     # Resuming information on eventual checkpoint
     saved_state_dict = torch.load(pretrained_path, map_location=device)
-    if saved_state_dict['balanced']:
-        balanced = True
-        print("Training with balanced class weights")
+    if checkpoint:
+        batch_size = saved_state_dict['batch_size']
+        if saved_state_dict['balanced']:
+            balanced = True
+            print("Training with balanced class weights")
 
     # Define the loader
-    batch_size = saved_state_dict['batch_size']
+    if checkpoint: batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     # pin_memory=True is beneficial for GPU training as it speeds up data transfer to CUDA memory.
     # It is not necessary for CPU-only training and can be omitted in such cases.
@@ -664,7 +668,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
-        current_epoch = saved_state_dict.get('epoch', 0)  # Get current epoch from saved state
+        current_epoch = saved_state_dict['epoch']  # Get current epoch from saved state
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
