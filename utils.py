@@ -200,3 +200,28 @@ def compute_gta5_class_weights(label_dir, num_classes=19):
         'inv_freqs': inv_freqs,
         'median_freq_balanced': median_freq_balanced,
     }
+
+
+###################################################################
+
+def convert_weights_format(pth_file, num_epochs, batch_size, balanced, context_path='resnet18'):
+    """
+    Converts a PyTorch model weights file to a format compatible with the current training setup.
+    This function is a placeholder and should be implemented based on specific requirements.
+    
+    Args:
+        pth_file (str): Path to the input .pth file.
+        num_epochs (int): Number of epochs used for training.
+        batch_size (int): Batch size used for training.
+        balanced (bool): Whether the training was balanced or not.
+        context_path (str): The context path used in the model, e.g., 'resnet18'.
+    """
+    old_model_dict = torch.load(pth_file, map_location='cpu')
+    torch.save({
+        'model_state_dict': old_model_dict,
+        'epoch': num_epochs,
+        'batch_size': batch_size,
+        'balanced': balanced,
+        'context_path': context_path,
+    }, pth_file)
+    print(f"Converted weights saved to {pth_file} with num_epochs={num_epochs}, batch_size={batch_size}, balanced={balanced}, context_path={context_path}.")
