@@ -92,7 +92,6 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
             print("Training with balanced class weights")
 
     # Define the loader
-    if checkpoint: batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers) 
     print(f"Using {batch_size} as batch size.")
@@ -139,7 +138,11 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
     # Polynomial learning rate
     init_lr = 1e-4
     max_iter = (num_epochs-current_epoch) * len(train_loader)
-    current_iter = saved_state_dict['current_lr_iter'] if checkpoint else 0
+    if checkpoint:
+        current_iter = saved_state_dict['current_lr_iter']  
+    else: 
+        current_iter = 0
+    print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
 
     ###############
     # TRAINING LOOP
@@ -365,7 +368,6 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
             print("Training with balanced class weights")
 
     # Define the loader
-    if checkpoint: batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
 
@@ -401,7 +403,10 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
         new_params = model.state_dict().copy()
         for i in saved_state_dict:
             i_parts = i.split('.')
-            new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+            if len(i_parts) > 1:  # Validate key format
+                new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+            else:
+                print(f"Skipping invalid key format: {i}")
         model.load_state_dict(new_params, strict=False)
         print("Starting training from scratch with pretrained weights")
     
@@ -412,7 +417,11 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=Fals
     # Polynomial learning rate decay
     init_lr = 1e-4
     max_iter = (num_epochs-current_epoch) * len(train_loader)
-    current_iter = saved_state_dict['current_lr_iter'] if checkpoint else 0
+    if checkpoint:
+        current_iter = saved_state_dict['current_lr_iter']  
+    else: 
+        current_iter = 0
+    print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
 
     ###############
     # TRAINING LOOP
@@ -639,7 +648,6 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
             print("Training with balanced class weights")
 
     # Define the loader
-    if checkpoint: batch_size = saved_state_dict['batch_size']
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     # pin_memory=True is beneficial for GPU training as it speeds up data transfer to CUDA memory.
     # It is not necessary for CPU-only training and can be omitted in such cases.
@@ -688,7 +696,11 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     # Polynomial learning rate decay
     init_lr = 1e-4
     max_iter = (num_epochs-current_epoch) * len(train_loader)
-    current_iter = saved_state_dict['current_lr_iter'] if checkpoint else 0
+    if checkpoint:
+        current_iter = saved_state_dict['current_lr_iter']  
+    else: 
+        current_iter = 0
+    print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
 
     ###############
     # TRAINING LOOP
