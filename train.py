@@ -328,7 +328,7 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
 
 from models.bisenet.build_bisenet import BiSeNet
 
-def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18'):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
