@@ -137,17 +137,17 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
 
     # Polynomial learning rate
     init_lr = 1e-4
-    max_iter = (num_epochs-current_epoch) * len(train_loader)
     if checkpoint:
         current_iter = saved_state_dict['current_lr_iter']  
     else: 
         current_iter = 0
+    max_iter = (num_epochs-current_epoch) * len(train_loader) + current_iter
     print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
 
     ###############
     # TRAINING LOOP
     ###############
-    for epoch in range(current_epoch, num_epochs-current_epoch):
+    for epoch in range(current_epoch, num_epochs):
         model.train()
         for images, labels in train_loader: # For each batch
             images, labels = images.to(device), labels.to(device) # It takes images and labels from the dataloader
@@ -416,17 +416,17 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
 
     # Polynomial learning rate decay
     init_lr = 1e-4
-    max_iter = (num_epochs-current_epoch) * len(train_loader)
     if checkpoint:
         current_iter = saved_state_dict['current_lr_iter']  
     else: 
         current_iter = 0
+    max_iter = (num_epochs-current_epoch) * len(train_loader) + current_iter
     print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
 
     ###############
     # TRAINING LOOP
     ###############
-    for epoch in range(current_epoch, num_epochs - current_epoch):
+    for epoch in range(current_epoch, num_epochs):
         model.train()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
