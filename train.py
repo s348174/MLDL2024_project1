@@ -94,23 +94,25 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
     # Define the loader
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers) 
-    print(f"Using {batch_size} as batch size.")
-    print(f"Using {max_num_workers} workers for data loading.")
+    print(f"Training with {max_num_workers} workers and batch size {batch_size}.")
         
     # Load the model
     if checkpoint:
         model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=saved_state_dict['model_state_dict']) # The baseline for semantic segmentation
     else:
         model = get_deeplab_v2(num_classes=len(class_names), pretrain=True, pretrain_model_path=pretrain_imagenet_path) # The baseline for semantic segmentation
-    
+    model.to(device)  # Move model to device
+
     # Define loss function
     if balanced: 
         # Evaluate the class weights based on frequencies
         class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
         class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
         criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
+        print("Training with balanced class weights")
     else:
         criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+        print("Training without balanced class weights")
     #criterion = torch.nn.BCEWithLogitsLoss()
     #criterion = torch.nn.MSELoss()
 
@@ -126,7 +128,7 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
     if checkpoint:
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
-        current_epoch = saved_state_dict['epoch']  # Get current epoch from saved state
+        current_epoch = saved_state_dict['epoch'] + 1 # Get current epoch from saved state
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
@@ -370,9 +372,11 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
     # Define the loader
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
-
+    print(f"Training with {max_num_workers} workers and batch size {batch_size}.")
+    
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
+    model.to(device)  # Move model to device
 
     # Define loss function
     if balanced: 
@@ -380,8 +384,10 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
         class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
         class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
         criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
+        print("Training with balanced class weights")
     else:
         criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+        print("Training without balanced class weights")
 
     # Define optimizer and scaler
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
@@ -394,7 +400,7 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
-        current_epoch = saved_state_dict['epoch']  # Get current epoch from saved state
+        current_epoch = saved_state_dict['epoch'] + 1 # Get current epoch from saved state
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
@@ -644,7 +650,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     # Resuming information on eventual checkpoint
     saved_state_dict = torch.load(pretrained_path, map_location=device)
     if checkpoint:
-        batch_size = saved_state_dict['bacth_size']
+        batch_size = saved_state_dict['batch_size']
         if saved_state_dict['balanced']:
             balanced = True
 
@@ -681,7 +687,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
-        current_epoch = saved_state_dict['epoch']  # Get current epoch from saved state
+        current_epoch = saved_state_dict['epoch'] + 1  # Get current epoch from saved state
         print(f"Resuming training from epoch {current_epoch}")
     else:
         current_epoch = 0
