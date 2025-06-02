@@ -578,8 +578,10 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
 # TRAINING BISENET ON GTA5
 ##########################
 def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18'):
+    # Set the environment variable for PyTorch CUDA memory allocation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
     #####################
     # SETUP TRAINING DATA
@@ -655,6 +657,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
 
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
+    model.to(device)  # Move model to device
 
     # Define loss function
     if balanced: 
@@ -712,7 +715,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
-            with autocast(device_type="cuda", enabled=True):
+            with autocast(device_type=device, enabled=True):
                 outputs = model(images)
                 # BiSeNet returns (main, aux1, aux2) in train mode
                 if isinstance(outputs, (tuple, list)) and len(outputs) == 3:
