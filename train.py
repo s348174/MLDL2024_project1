@@ -645,13 +645,13 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         batch_size = saved_state_dict['batch_size']
         if saved_state_dict['balanced']:
             balanced = True
-            print("Training with balanced class weights")
 
     # Define the loader
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     # pin_memory=True is beneficial for GPU training as it speeds up data transfer to CUDA memory.
     # It is not necessary for CPU-only training and can be omitted in such cases.
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
+    print(f"Training with {max_num_workers} workers and batch size {batch_size}.")
 
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
@@ -662,8 +662,10 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
         class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
         criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
+        print("Training with balanced class weights")
     else:
         criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+        print("Training without balanced class weights")
 
     # Define optimizer and scaler
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
