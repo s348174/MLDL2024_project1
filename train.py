@@ -642,7 +642,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     # Resuming information on eventual checkpoint
     saved_state_dict = torch.load(pretrained_path, map_location=device)
     if checkpoint:
-        batch_size = saved_state_dict['batch_size']
+        batch_size = saved_state_dict['bacth_size']
         if saved_state_dict['balanced']:
             balanced = True
 
@@ -735,7 +735,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scaler': scaler.state_dict(),    # If using AMP
                 'epoch': epoch,
-                'bacth_size': batch_size,  # Save the batch size for resuming training
+                'batch_size': batch_size,  # Save the batch size for resuming training
                 'balanced': balanced,  # Save whether the model was trained with balanced class weights
                 'current_lr_iter': current_iter,  # Save the current iteration for learning rate scheduling
                 # 'loss': loss_value,             # Optional
