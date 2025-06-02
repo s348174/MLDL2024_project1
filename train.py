@@ -373,7 +373,7 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
     max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers)
     print(f"Training with {max_num_workers} workers and batch size {batch_size}.")
-    
+
     # Build BiSeNet model with pretrained image
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
     model.to(device)  # Move model to device
