@@ -715,7 +715,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
-            with autocast(device_type="cuda" if torch.cuda.is_available() else "cpu", enabled=True):
+            with autocast(device_type="cuda", enabled=True):
                 outputs = model(images)
                 # BiSeNet returns (main, aux1, aux2) in train mode
                 if isinstance(outputs, (tuple, list)) and len(outputs) == 3:
