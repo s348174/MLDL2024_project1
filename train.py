@@ -177,7 +177,7 @@ def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoi
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scaler': scaler.state_dict(),    # If using AMP
                 'epoch': epoch,
-                'bacth_size': batch_size,  # Save the batch size for resuming training
+                'batch_size': batch_size,  # Save the batch size for resuming training
                 'balanced': balanced,  # Save whether the model was trained with balanced class weights
                 'current_lr_iter': current_iter,  # Save the current iteration for learning rate scheduling
                 # 'loss': loss_value,             # Optional
@@ -453,7 +453,7 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scaler': scaler.state_dict(),    # If using AMP
                 'epoch': epoch,
-                'bacth_size': batch_size,  # Save the batch size for resuming training
+                'batch_size': batch_size,  # Save the batch size for resuming training
                 'balanced': balanced,  # Save whether the model was trained with balanced class weights
                 'current_lr_iter': current_iter,  # Save the current iteration for learning rate scheduling
                 # 'loss': loss_value,             # Optional
@@ -601,7 +601,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         transform=input_transform,
         target_transform=target_transform,
     )
-
+    """
     # --- Add this block here to check pixels labels in sample images ---
     N = 10
     for i in range(N):
@@ -611,7 +611,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         unique, counts = np.unique(label_np, return_counts=True)
         print(f"GTA5 Sample {i}: {dict(zip(unique, counts))}")
     # ---------------------------
-
+    """
     """
     #######################
     # DATASET VISUALIZATION
@@ -697,17 +697,17 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
 
     # Polynomial learning rate decay
     init_lr = 1e-4
-    max_iter = (num_epochs-current_epoch) * len(train_loader)
     if checkpoint:
         current_iter = saved_state_dict['current_lr_iter']  
     else: 
         current_iter = 0
+    max_iter = (num_epochs-current_epoch) * len(train_loader) + current_iter
     print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
 
     ###############
     # TRAINING LOOP
     ###############
-    for epoch in range(current_epoch, num_epochs - current_epoch):
+    for epoch in range(current_epoch, num_epochs):
         model.train()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)

@@ -14,7 +14,7 @@ model_path = workspace_path + "/export/bisenet_gta_epoch_30.pth"
 
 #deeplab_test(dataset_path_emanuele, model_path)
 #convert_weights_format(model_path, 50, 2, False, context_path='resnet18')
-bisenet_test(dataset_path_alberto, model_path)
+#bisenet_test(dataset_path_alberto, model_path)
 
 gta_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/datasets/GTA5"
 gta_model = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_project1/export/bisenet_on_gta_final_4_batches_balanced_polylr.pth"
