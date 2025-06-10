@@ -1,4 +1,5 @@
 import torch
+import random
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -22,8 +23,100 @@ from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
 from torch.amp import autocast, GradScaler
 
+#classes for dataAugmentation
+
+class RandomHorizontalFlipPair:
+    def __init__(self, p=0.5):
+        self.p = p
+    def __call__(self, img, label):
+        if random.random() < self.p:
+            img = transforms.functional.hflip(img)
+            label = transforms.functional.hflip(label)
+        return img, label
+
+class RandomGaussianBlur:
+    def __init__(self, p=0.5, kernel_size=5, sigma=(0.1, 2.0)):
+        self.p = p
+        self.blur = transforms.GaussianBlur(kernel_size=kernel_size, sigma=sigma)
+    def __call__(self, img):
+        if random.random() < self.p:
+            return self.blur(img)
+        return img
+    
+class RandomMultiply:
+    def __init__(self, p=0.5, min_factor=0.7, max_factor=1.3):
+        self.p = p
+        self.min_factor = min_factor
+        self.max_factor = max_factor
+    def __call__(self, img):
+        if random.random() < self.p:
+            factor = random.uniform(self.min_factor, self.max_factor)
+            img = transforms.functional.adjust_brightness(img, factor)
+        return img
+
+class RandomRotationPair:
+    def __init__(self, degrees=10, p=0.5):
+        self.degrees = degrees
+        self.p = p
+    def __call__(self, img, label):
+        if random.random() < self.p:
+            angle = random.uniform(-self.degrees, self.degrees)
+            img = transforms.functional.rotate(img, angle, fill=0)
+            label = transforms.functional.rotate(label, angle, fill=255)  # 255 per ignore_index
+        return img, label
+
+
+# Joint transformation function for image and label for data augmentation
+
+def joint_transform(img, label, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
+    img = transforms.Resize((512, 1024))(img)
+    label = transforms.Resize((512, 1024), interpolation=Image.NEAREST)(label)
+    if do_rotate:
+        img, label = RandomRotationPair(degrees=10, p=0.5)(img, label)
+    if do_flip:
+        img, label = RandomHorizontalFlipPair(p=0.5)(img, label)
+    if do_blur:
+        img = RandomGaussianBlur(p=0.5, kernel_size=5, sigma=(0.1, 2.0))(img)
+    if do_multiply:
+        img = RandomMultiply(p=0.5, min_factor=0.7, max_factor=1.3)(img)
+    return img, label
+
+
+# Custom dataset class for augmented segmentation
+
+class AugmentedSegmentationDataset:
+    def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
+        self.base_dataset = base_dataset
+        self.do_rotate = do_rotate
+        self.do_multiply = do_multiply
+        self.do_blur = do_blur
+        self.do_flip = do_flip
+
+    def __len__(self):
+        return len(self.base_dataset)
+
+    def __getitem__(self, idx):
+        img, label = self.base_dataset[idx]
+        if isinstance(img, torch.Tensor):
+            img = transforms.ToPILImage()(img)
+        if isinstance(label, torch.Tensor):
+            label = Image.fromarray(label.numpy().astype(np.uint8))
+        img, label = joint_transform(
+            img, label,
+            do_rotate=self.do_rotate,
+            do_multiply=self.do_multiply,
+            do_blur=self.do_blur,
+            do_flip=self.do_flip
+        )
+        img = transforms.ToTensor()(img)
+        img = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
+        label = torch.from_numpy(np.array(label)).long()
+        return img, label
+
+
+
 #################
-# TRAINIG DEEPLAB
+# TRAINING DEEPLAB
 #################
 
 def deeplab_train(dataset_path, workspace_path, pretrain_imagenet_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2): 
@@ -333,7 +426,10 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
 
 from models.bisenet.build_bisenet import BiSeNet
 
-def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18', augmentation = "0000"):
+
+    #augmentation = "wxyz" w=rotate, x=multiply, y=blur, z=flip (1 yes, 0 no)
+
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -342,20 +438,27 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
     #####################
     image_dir = os.path.join(dataset_path, "images/train")
     label_dir = os.path.join(dataset_path, "gtFine/train")
-    input_transform = transforms.Compose([
-        transforms.Resize((512, 1024)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    ])
-    target_transform = transforms.Compose([
-        transforms.Resize((512, 1024), interpolation=Image.NEAREST),
-        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long()),
-    ])
-    dataset = CityScapesSegmentation(
+
+    # Crea il dataset base SENZA transform (le augmentation sono gestite dopo dal wrapper)
+    base_dataset = CityScapesSegmentation(
         image_dir=image_dir,
         label_dir=label_dir,
-        transform=input_transform,
-        target_transform=target_transform,
+        transform=None,
+        target_transform=None)
+
+    #augmentation selection
+    do_rotate   = augmentation[0] == "1"
+    do_multiply = augmentation[1] == "1"
+    do_blur     = augmentation[2] == "1"
+    do_flip     = augmentation[3] == "1"
+
+    # Wrappa il dataset base con la classe custom
+    dataset = AugmentedSegmentationDataset(
+        base_dataset,
+        do_rotate=do_rotate,
+        do_multiply=do_multiply,
+        do_blur=do_blur,
+        do_flip=do_flip
     )
 
     #####################
