@@ -105,7 +105,7 @@ class AugmentedSegmentationDataset:
             img, label,
             do_rotate=self.do_rotate,
             do_multiply=self.do_multiply,
-            do_blur=self.do_blur,
+            do_blur=self.do_blur,ok d
             do_flip=self.do_flip
         )
         img = transforms.ToTensor()(img)
@@ -113,6 +113,13 @@ class AugmentedSegmentationDataset:
         label = torch.from_numpy(np.array(label)).long()
         return img, label
 
+    @property
+    def num_classes(self):
+        return self.base_dataset.num_classes
+
+    @property
+    def classes(self):
+        return self.base_dataset.classes
 
 
 #################
@@ -445,8 +452,8 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
         label_dir=label_dir,
         transform=None,
         target_transform=None)
-    num_classes = base_dataset.num_classes
-    classes_names = base_dataset.classes
+    num_classes = dataset.num_classes
+    classes_names = dataset.classes
 
     #augmentation selection
     do_rotate   = augmentation[0] == "1"
