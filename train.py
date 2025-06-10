@@ -445,6 +445,8 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
         label_dir=label_dir,
         transform=None,
         target_transform=None)
+    num_classes = base_dataset.num_classes
+    classes_names = base_dataset.classes
 
     #augmentation selection
     do_rotate   = augmentation[0] == "1"
@@ -478,19 +480,17 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
     print(f"Training with {max_num_workers} workers and batch size {batch_size}.")
 
     # Build BiSeNet model with pretrained image
-    model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path)
+    model = BiSeNet(num_classes=num_classes, context_path=context_path)
     model.to(device)  # Move model to device
 
     # Define loss function
     if balanced: 
         # Evaluate the class weights based on frequencies
-        class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+        class_weights_dict = compute_class_weights(label_dir, num_classes=num_classes)
         class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
-        criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
-        print("Training with balanced class weights")
+        criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
     else:
         criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
-        print("Training without balanced class weights")
 
     # Define optimizer and scaler
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
