@@ -452,8 +452,8 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
         label_dir=label_dir,
         transform=None,
         target_transform=None)
-    num_classes = dataset.num_classes
-    classes_names = dataset.classes
+    num_classes = base_dataset.num_classes
+    classes_names = base_dataset.classes
 
     #augmentation selection
     do_rotate   = augmentation[0] == "1"
