@@ -455,7 +455,7 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
     num_classes = base_dataset.num_classes
     classes_names = base_dataset.classes
 
-    #augmentation selection
+    # Augmentation selection
     do_rotate   = augmentation[0] == "1"
     do_multiply = augmentation[1] == "1"
     do_blur     = augmentation[2] == "1"
@@ -693,7 +693,7 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
 ##########################
 # TRAINING BISENET ON GTA5
 ##########################
-def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18'):
+def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18', augmentation = '0000'):
     # Set the environment variable for PyTorch CUDA memory allocation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -704,21 +704,31 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     #####################
     image_dir = dataset_path + "/images"
     label_dir = dataset_path + "/labels"
-    input_transform = transforms.Compose([
-        transforms.Resize((720, 1280)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    ])
-    target_transform = transforms.Compose([
-        transforms.Resize((720, 1280), interpolation=Image.NEAREST),
-        transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long()),
-    ])
-    dataset = GTA5(
+
+    # Crea il dataset base SENZA transform (le augmentation sono gestite dopo dal wrapper)
+    base_dataset = CityScapesSegmentation(
         image_dir=image_dir,
         label_dir=label_dir,
-        transform=input_transform,
-        target_transform=target_transform,
+        transform=None,
+        target_transform=None)
+    num_classes = base_dataset.num_classes
+    classes_names = base_dataset.classes
+
+    #augmentation selection
+    do_rotate   = augmentation[0] == "1"
+    do_multiply = augmentation[1] == "1"
+    do_blur     = augmentation[2] == "1"
+    do_flip     = augmentation[3] == "1"
+
+    # Wrappa il dataset base con la classe custom
+    dataset = AugmentedSegmentationDataset(
+        base_dataset,
+        do_rotate=do_rotate,
+        do_multiply=do_multiply,
+        do_blur=do_blur,
+        do_flip=do_flip
     )
+
     """
     # --- Add this block here to check pixels labels in sample images ---
     N = 10
