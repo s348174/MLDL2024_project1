@@ -105,7 +105,7 @@ class AugmentedSegmentationDataset:
             img, label,
             do_rotate=self.do_rotate,
             do_multiply=self.do_multiply,
-            do_blur=self.do_blur,ok d
+            do_blur=self.do_blur,
             do_flip=self.do_flip
         )
         img = transforms.ToTensor()(img)
