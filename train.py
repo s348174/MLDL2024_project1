@@ -706,7 +706,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     label_dir = dataset_path + "/labels"
 
     # Crea il dataset base SENZA transform (le augmentation sono gestite dopo dal wrapper)
-    base_dataset = CityScapesSegmentation(
+    base_dataset = GTA5(
         image_dir=image_dir,
         label_dir=label_dir,
         transform=None,
