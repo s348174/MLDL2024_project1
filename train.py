@@ -100,7 +100,7 @@ class AugmentedSegmentationDataset:
         if isinstance(img, torch.Tensor):
             img = transforms.ToPILImage()(img)
         if isinstance(label, torch.Tensor):
-            label = Image.fromarray(label.numpy().astype(np.uint8)).convert("RGB")  # Convert to RGB for label
+            label = Image.fromarray(label.numpy().astype(np.uint8))
         img, label = joint_transform(
             img, label,
             do_rotate=self.do_rotate,
@@ -710,7 +710,8 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         image_dir=image_dir,
         label_dir=label_dir,
         transform=None,
-        target_transform=None)
+        target_transform=transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
+    )
     num_classes = base_dataset.num_classes
     classes_names = base_dataset.classes
 
