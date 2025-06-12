@@ -1,7 +1,7 @@
 import torch
 import random
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 #from datasets.cityscapes import CityScapesSegmentation #select this for local
 from cityscapes import CityScapesSegmentation #select this for colab
@@ -17,6 +17,7 @@ import os
 from PIL import Image
 from tempfile import TemporaryDirectory
 from torchvision.transforms import functional as TF
+import torchvision.transforms.functional as F
 from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler, convert_gta5_rgb_to_trainid, compute_gta5_class_weights
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
@@ -89,7 +90,7 @@ def joint_transform(img, label, do_rotate=False, do_multiply=False, do_blur=Fals
 
 
 # Custom dataset class for augmented segmentation
-
+"""
 class AugmentedSegmentationDataset:
     def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
         self.base_dataset = base_dataset
@@ -126,7 +127,77 @@ class AugmentedSegmentationDataset:
     @property
     def classes(self):
         return self.base_dataset.classes
+"""
 
+class AugmentedSegmentationDataset(Dataset):
+    def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
+        self.base_dataset = base_dataset
+        self.do_rotate = do_rotate
+        self.do_multiply = do_multiply
+        self.do_blur = do_blur
+        self.do_flip = do_flip
+        self.resize_size = (512, 1024)
+
+        # Prebuild deterministic transform lists
+        self.base_transform = transforms.Compose([
+            transforms.Resize(self.resize_size),
+        ])
+        
+        self.to_tensor = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+        ])
+
+    def __len__(self):
+        return len(self.base_dataset)
+
+    def __getitem__(self, idx):
+        img_path = self.base_dataset.images[idx]
+        label_path = self.base_dataset.labels[idx]
+
+        img = Image.open(img_path).convert("RGB")
+        label = Image.open(label_path).convert("RGB")
+
+        # Resize both image and label
+        img = self.base_transform(img)
+        label = self.base_transform(label)
+
+        # Convert to tensors early
+        img = F.to_tensor(img)
+        label_np = convert_gta5_rgb_to_trainid(label)
+        label = torch.from_numpy(label_np).long()
+
+        # Paired augmentations
+        if self.do_flip and random.random() < 0.5:
+            img = F.hflip(img)
+            label = F.hflip(label)
+
+        if self.do_rotate and random.random() < 0.5:
+            angle = random.uniform(-10, 10)
+            img = F.rotate(img, angle, fill=0)
+            label = F.rotate(label, angle, fill=255)
+
+        # Single-image augmentations
+        if self.do_blur and random.random() < 0.5:
+            sigma = random.uniform(0.1, 2.0)
+            img = F.gaussian_blur(img, kernel_size=5, sigma=sigma)
+
+        if self.do_multiply and random.random() < 0.5:
+            factor = random.uniform(0.7, 1.3)
+            img = F.adjust_brightness(img, factor)
+
+        img = self.to_tensor(img)
+
+        return img, label
+
+    @property
+    def num_classes(self):
+        return self.base_dataset.num_classes
+
+    @property
+    def classes(self):
+        return self.base_dataset.classes
 
 #################
 # TRAINING DEEPLAB
@@ -721,7 +792,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     num_classes = base_dataset.num_classes
     classes_names = base_dataset.classes
 
-    #augmentation selection
+    # Augmentation selection
     do_rotate   = augmentation[0] == "1"
     do_multiply = augmentation[1] == "1"
     do_blur     = augmentation[2] == "1"
