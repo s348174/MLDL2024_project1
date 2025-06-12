@@ -79,6 +79,12 @@ def joint_transform(img, label, do_rotate=False, do_multiply=False, do_blur=Fals
         img = RandomGaussianBlur(p=0.5, kernel_size=5, sigma=(0.1, 2.0))(img)
     if do_multiply:
         img = RandomMultiply(p=0.5, min_factor=0.7, max_factor=1.3)(img)
+    # Ensure label is always a 2D tensor of class indices
+    label_np = np.array(label)
+    if label_np.ndim == 3:
+        # If label is RGB or multi-channel, convert to single channel (assume first channel)
+        label_np = label_np[..., 0]
+    label = Image.fromarray(label_np.astype(np.uint8), mode='L')
     return img, label
 
 
@@ -100,7 +106,7 @@ class AugmentedSegmentationDataset:
         if isinstance(img, torch.Tensor):
             img = transforms.ToPILImage()(img)
         if isinstance(label, torch.Tensor):
-            label = Image.fromarray(label.numpy().astype(np.uint8))
+            label = Image.fromarray(label.numpy().astype(np.uint8), mode='L')
         img, label = joint_transform(
             img, label,
             do_rotate=self.do_rotate,
@@ -789,7 +795,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     # Define loss function
     if balanced: 
         # Evaluate the class weights based on frequencies
-        class_weights_dict = compute_class_weights(label_dir, num_classes=dataset.num_classes)
+        class_weights_dict = compute_gta5_class_weights(label_dir, num_classes=dataset.num_classes)
         class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
         criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255) # Normalized weights for each class
         print("Training with balanced class weights")
@@ -803,7 +809,6 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
 
     # Resuming checkpoint if available
     print("BiSeNet pretrain loading...")
-    saved_state_dict = torch.load(pretrained_path, map_location=device)
     if checkpoint:
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
