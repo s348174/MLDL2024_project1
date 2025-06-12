@@ -100,7 +100,7 @@ class AugmentedSegmentationDataset:
         if isinstance(img, torch.Tensor):
             img = transforms.ToPILImage()(img)
         if isinstance(label, torch.Tensor):
-            label = Image.fromarray(label.numpy().astype(np.uint8))
+            label = Image.fromarray(label.numpy().astype(np.uint8)).convert("RGB")  # Convert to RGB for label
         img, label = joint_transform(
             img, label,
             do_rotate=self.do_rotate,
