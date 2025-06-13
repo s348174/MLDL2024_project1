@@ -129,6 +129,7 @@ class AugmentedSegmentationDataset:
     @property
     def classes(self):
         return self.base_dataset.classes
+        """
 
 class AugmentedSegmentationDataset(Dataset):
     def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
@@ -199,97 +200,7 @@ class AugmentedSegmentationDataset(Dataset):
     @property
     def classes(self):
         return self.base_dataset.classes
-        """
-
-class AugmentedSegmentationDataset(Dataset):
-    def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
-        self.base_dataset = base_dataset
-        self.do_rotate = do_rotate
-        self.do_multiply = do_multiply
-        self.do_blur = do_blur
-        self.do_flip = do_flip
-
-        # === Paired transforms (image and label) ===
-        paired_ops = []
-
-        # Resize both image and label
-        paired_ops.append(
-            v2.Resize(size=(512, 1024), interpolation=InterpolationMode.BILINEAR)
-        )
-
-        # Random horizontal flip (paired)
-        if self.do_flip:
-            paired_ops.append(v2.RandomHorizontalFlip(p=0.5))
-
-        # Random rotation (paired)
-        if self.do_rotate:
-            paired_ops.append(
-                v2.RandomRotation(degrees=10,
-                                  interpolation=InterpolationMode.BILINEAR,
-                                  fill=(0,),  # Image fill
-                                  fill_mask=255)  # Label fill (e.g., ignore index)
-            )
-
-        self.paired_transform = v2.Compose(paired_ops)
-
-        # === Image-only transforms ===
-        image_ops = []
-
-        # Random brightness multiplier (emulating RandomMultiply)
-        if self.do_multiply:
-            image_ops.append(
-                v2.RandomApply([v2.ColorJitter(brightness=(0.7, 1.3))], p=0.5)
-            )
-
-        # Gaussian blur
-        if self.do_blur:
-            image_ops.append(
-                v2.RandomApply([v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0))], p=0.5)
-            )
-
-        # Final image transform: type + normalize
-        image_ops.extend([
-            v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225])
-        ])
-
-        self.image_transform = v2.Compose(image_ops)
-
-    def __len__(self):
-        return len(self.base_dataset)
-
-    def __getitem__(self, idx):
-        # Load original image and label
-        img_path = self.base_dataset.images[idx]
-        label_path = self.base_dataset.labels[idx]
-
-        img = Image.open(img_path).convert("RGB")
-        label_rgb = Image.open(label_path).convert("RGB")
-
-        # Convert label from RGB to trainId
-        label_np = convert_gta5_rgb_to_trainid(label_rgb)
-        label = Image.fromarray(label_np.astype(np.uint8), mode="L")
-
-        # Apply paired transform to both image and label
-        img, label = self.paired_transform(img, label)
-
-        # Apply image-only transforms (blur, brightness, normalize)
-        img = self.image_transform(img)
-
-        # Convert label to tensor
-        label = torch.from_numpy(np.array(label)).long()
-
-        return img, label
-
-    @property
-    def num_classes(self):
-        return self.base_dataset.num_classes
-
-    @property
-    def classes(self):
-        return self.base_dataset.classes
-
+        
 
 #################
 # TRAINING DEEPLAB
