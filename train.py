@@ -178,7 +178,9 @@ class AugmentedSegmentationDataset(Dataset):
         if self.do_rotate and random.random() < 0.5:
             angle = random.uniform(-10, 10)
             img = F.rotate(img, angle, fill=0)
-            label = F.rotate(label, angle, fill=255)
+            #label = F.rotate(label, angle, fill=255)
+            label = TF.rotate(label.unsqueeze(1).float(), angle, fill=255, interpolation=TF.InterpolationMode.NEAREST).squeeze(1).long()
+            # Trying to solve issue with rotation
 
         # Single-image augmentations
         if self.do_blur and random.random() < 0.5:
