@@ -189,7 +189,7 @@ class AugmentedSegmentationDataset(Dataset):
             factor = random.uniform(0.7, 1.3)
             img = F.adjust_brightness(img, factor)
 
-        img = self.to_tensor(img)
+        #img = self.to_tensor(img)
 
         return img, label
 
