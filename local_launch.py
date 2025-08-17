@@ -10,7 +10,7 @@ pretrained_image_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL20
 num_epochs = 1
 #deeplab_train(dataset_path_alberto, workspace_path, pretrained_image_path, num_epochs)
 
-model_path = workspace_path + "/export/bisenet_gta_4_batches_balanced_pretrained_polylr.pth"
+model_path = workspace_path + "/export/bisenet_gta_epoch_20_0001.pth"
 
 #deeplab_test(dataset_path_emanuele, model_path)
 #convert_weights_format(model_path, 50, 2, False, context_path='resnet18')
