@@ -940,7 +940,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
 
         # Save model checkpoint
         if epoch % 2 == 0:
-            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_gta_epoch_{epoch}.pth")
+            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_gta_epoch_{epoch}_{augmentation}.pth")
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
@@ -962,4 +962,4 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
                 'balanced': balanced,  # Save whether the model was trained with balanced class weights
                 'context_path': context_path,  # Save the context path used
                }, export_path)
-    print("BiSeNet model saved as bisenet_final.pth")
+    print(f"BiSeNet model saved as bisenet_final_{augmentation}.pth")
