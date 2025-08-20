@@ -954,7 +954,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
             print(f"BiSeNet model on GTA saved at epoch {epoch}")
 
     # Save final model
-    export_path = os.path.join(workspace_path, "export/bisenet_on_gta_final.pth")
+    export_path = os.path.join(workspace_path, f"export/bisenet_on_gta_final_{augmentation}.pth")
     torch.save({
                 'model_state_dict': model.state_dict(),
                 'epoch': num_epochs,
