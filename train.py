@@ -155,43 +155,35 @@ class AugmentedSegmentationDataset(Dataset):
         return len(self.base_dataset)
 
     def __getitem__(self, idx):
-        img_path = self.base_dataset.images[idx]
-        label_path = self.base_dataset.labels[idx]
+        img, label = self.base_dataset[idx]  # img: [3, H, W], label: [H, W] (trainIds)
 
-        img = Image.open(img_path).convert("RGB")
-        label = Image.open(label_path).convert("RGB")
+        # Convert tensors to PIL for augmentation
+        img_pil = transforms.ToPILImage()(img)
+        label_pil = Image.fromarray(label.cpu().numpy().astype(np.uint8), mode='L')
 
-        # Resize both image and label
-        img = self.base_transform(img)
-        label = self.base_transform(label)
-
-        # Convert to tensors early
-        img = F.to_tensor(img)
-        label_np = convert_gta5_rgb_to_trainid(label)
-        label = torch.from_numpy(label_np).long()
+        # Resize (if not already done in base dataset)
+        #img_pil = transforms.Resize(self.resize_size)(img_pil)
+        #label_pil = transforms.Resize(self.resize_size, interpolation=Image.NEAREST)(label_pil)
 
         # Paired augmentations
         if self.do_flip and random.random() < 0.5:
-            img = F.hflip(img)
-            label = F.hflip(label)
-
+            img_pil = transforms.functional.hflip(img_pil)
+            label_pil = transforms.functional.hflip(label_pil)
         if self.do_rotate and random.random() < 0.5:
             angle = random.uniform(-10, 10)
-            img = F.rotate(img, angle, fill=0)
-            #label = F.rotate(label, angle, fill=255)
-            label = TF.rotate(label.unsqueeze(1).float(), angle, fill=255, interpolation=TF.InterpolationMode.NEAREST).squeeze(1).long()
-            # Trying to solve issue with rotation
-
+            img_pil = transforms.functional.rotate(img_pil, angle, fill=0)
+            label_pil = transforms.functional.rotate(label_pil, angle, fill=255)
         # Single-image augmentations
         if self.do_blur and random.random() < 0.5:
-            sigma = random.uniform(0.1, 2.0)
-            img = F.gaussian_blur(img, kernel_size=5, sigma=sigma)
-
+            img_pil = transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0))(img_pil)
         if self.do_multiply and random.random() < 0.5:
             factor = random.uniform(0.7, 1.3)
-            img = F.adjust_brightness(img, factor)
+            img_pil = transforms.functional.adjust_brightness(img_pil, factor)
 
-        #img = self.to_tensor(img)
+        # Convert back to tensor
+        img = transforms.ToTensor()(img_pil)
+        img = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img) # Renormalize after reconverting to torch tensor
+        label = torch.from_numpy(np.array(label_pil)).long()
 
         return img, label
 
@@ -791,9 +783,17 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     base_dataset = GTA5(
         image_dir=image_dir,
         label_dir=label_dir,
-        transform=None,
-        target_transform=transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
+        transform=transforms.Compose([
+            transforms.Resize((512, 1024)),  # Resize to 512x1024 resolution
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]),
+        target_transform=transforms.Compose([
+            transforms.Resize((512, 1024), interpolation=Image.NEAREST),
+            transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
+        ])
     )
+    
     num_classes = base_dataset.num_classes
     classes_names = base_dataset.classes
 
@@ -910,7 +910,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     init_lr = 1e-4
     if checkpoint:
         current_iter = saved_state_dict['current_lr_iter']  
-    else: 
+    else:
         current_iter = 0
     max_iter = (num_epochs-current_epoch) * len(train_loader) + current_iter
     print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
