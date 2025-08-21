@@ -67,21 +67,37 @@ class RandomRotationPair:
             img = transforms.functional.rotate(img, angle, fill=0)
             label = transforms.functional.rotate(label, angle, fill=255)  # 255 per ignore_index
         return img, label
+    
+class RandomColorJitter:
+    def __init__(self, brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.5):
+        self.p = p
+        self.color_jitter = transforms.ColorJitter(
+            brightness=brightness,
+            contrast=contrast,
+            saturation=saturation,
+            hue=hue
+        )
+    def __call__(self, img):
+        if random.random() < self.p:
+            return self.color_jitter(img)
+        return img
 
 
 # Joint transformation function for image and label for data augmentation
 
-def joint_transform(img, label, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
+def joint_transform(img, label, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False, do_colorjitter=False):
     img = transforms.Resize((512, 1024))(img)
     label = transforms.Resize((512, 1024), interpolation=Image.NEAREST)(label)
     if do_rotate:
-        img, label = RandomRotationPair(degrees=10, p=0.5)(img, label)
+        img, label = RandomRotationPair(p=0.5, degrees=10)(img, label)
     if do_flip:
         img, label = RandomHorizontalFlipPair(p=0.5)(img, label)
     if do_blur:
         img = RandomGaussianBlur(p=0.5, kernel_size=5, sigma=(0.1, 2.0))(img)
     if do_multiply:
         img = RandomMultiply(p=0.5, min_factor=0.7, max_factor=1.3)(img)
+    if do_colorjitter:
+        img = RandomColorJitter(p=0.5, brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)(img)
     # Ensure label is always a 2D tensor of class indices
     label_np = np.array(label)
     if label_np.ndim == 3:
@@ -94,12 +110,13 @@ def joint_transform(img, label, do_rotate=False, do_multiply=False, do_blur=Fals
 # Custom dataset class for augmented segmentation
 """
 class AugmentedSegmentationDataset:
-    def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
+    def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False, do_colorjitter=False):
         self.base_dataset = base_dataset
         self.do_rotate = do_rotate
         self.do_multiply = do_multiply
         self.do_blur = do_blur
         self.do_flip = do_flip
+        self.do_colorjitter = do_colorjitter
 
     def __len__(self):
         return len(self.base_dataset)
@@ -115,7 +132,8 @@ class AugmentedSegmentationDataset:
             do_rotate=self.do_rotate,
             do_multiply=self.do_multiply,
             do_blur=self.do_blur,
-            do_flip=self.do_flip
+            do_flip=self.do_flip,
+            do_colorjitter=self.do_colorjitter
         )
         img = transforms.ToTensor()(img)
         img = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
@@ -132,12 +150,13 @@ class AugmentedSegmentationDataset:
         """
 
 class AugmentedSegmentationDataset(Dataset):
-    def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False):
+    def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False, do_colorjitter=False):
         self.base_dataset = base_dataset
         self.do_rotate = do_rotate
         self.do_multiply = do_multiply
         self.do_blur = do_blur
         self.do_flip = do_flip
+        self.do_colorjitter = do_colorjitter
         self.resize_size = (512, 1024)
 
         # Prebuild deterministic transform lists
@@ -179,6 +198,9 @@ class AugmentedSegmentationDataset(Dataset):
         if self.do_multiply and random.random() < 0.5:
             factor = random.uniform(0.7, 1.3)
             img_pil = transforms.functional.adjust_brightness(img_pil, factor)
+        if self.do_colorjitter and random.random() < 0.5:
+            img_pil = transforms.ColorJitter(
+                brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)(img_pil)
 
         # Convert back to tensor
         img = transforms.ToTensor()(img_pil)
@@ -507,9 +529,9 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
 
 from models.bisenet.build_bisenet import BiSeNet
 
-def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18', augmentation = "0000"):
+def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18', augmentation = "00000"):
 
-    #augmentation = "wxyz" w=rotate, x=multiply, y=blur, z=flip (1 yes, 0 no)
+    #augmentation = "wxyza" w=rotate, x=multiply, y=blur, z=flip, a=color_jitter (1 yes, 0 no)
 
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -534,6 +556,7 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
     do_multiply = augmentation[1] == "1"
     do_blur     = augmentation[2] == "1"
     do_flip     = augmentation[3] == "1"
+    do_colorjitter = augmentation[4] == "1"
 
     # Wrappa il dataset base con la classe custom
     dataset = AugmentedSegmentationDataset(
@@ -541,7 +564,8 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
         do_rotate=do_rotate,
         do_multiply=do_multiply,
         do_blur=do_blur,
-        do_flip=do_flip
+        do_flip=do_flip,
+        do_colorjitter=do_colorjitter
     )
 
     #####################
@@ -767,7 +791,7 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
 ##########################
 # TRAINING BISENET ON GTA5
 ##########################
-def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18', augmentation = '0000'):
+def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=False, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18', augmentation = '00000'):
     # Set the environment variable for PyTorch CUDA memory allocation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -802,6 +826,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
     do_multiply = augmentation[1] == "1"
     do_blur     = augmentation[2] == "1"
     do_flip     = augmentation[3] == "1"
+    do_colorjitter = augmentation[4] == "1"
 
     # Wrappa il dataset base con la classe custom
     dataset = AugmentedSegmentationDataset(
@@ -809,7 +834,8 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         do_rotate=do_rotate,
         do_multiply=do_multiply,
         do_blur=do_blur,
-        do_flip=do_flip
+        do_flip=do_flip,
+        do_colorjitter=do_colorjitter
     )
 
     """
