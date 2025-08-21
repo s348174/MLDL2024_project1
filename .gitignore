@@ -2,9 +2,11 @@
 datasets/Cityscapes/
 datasets/GTA5/
 pyenv/
+.venv/
 export/
 __pycache__/
 .jupyter/
 .ipynb_checkpoints/
-# Ignora tutti i pretrained weigths
+
+# Ignora tutti i pretrained weights
 *.pth
