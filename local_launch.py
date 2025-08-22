@@ -11,7 +11,7 @@ num_epochs = 1
 #deeplab_train(dataset_path_alberto, workspace_path, pretrained_image_path, num_epochs)
 
 #model_path_alberto = workspace_path + "/export/bisenet_on_gta_20_epoch.pth"
-model_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW_Masone/MLDL2024_project1/bisenet_on_gta_final_00001.pth"
+model_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW_Masone/MLDL2024_project1/bisenet_on_gta_20_final_10000.pth"
 
 #deeplab_test(dataset_path_emanuele, model_path)
 #convert_weights_format(model_path, 50, 2, False, context_path='resnet18')
