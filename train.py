@@ -69,7 +69,7 @@ class RandomRotationPair:
         return img, label
     
 class RandomColorJitter:
-    def __init__(self, brightness=0.2, contrast=0.4, saturation=0.2, hue=0.1, p=0.5):
+    def __init__(self, brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1, p=0.5):
         self.p = p
         self.color_jitter = transforms.ColorJitter(
             brightness=brightness,
@@ -97,7 +97,7 @@ def joint_transform(img, label, do_rotate=False, do_multiply=False, do_blur=Fals
     if do_multiply:
         img = RandomMultiply(p=0.5, min_factor=0.7, max_factor=1.3)(img)
     if do_colorjitter:
-        img = RandomColorJitter(p=0.5, brightness=0.2, contrast=0.4, saturation=0.2, hue=0.1)(img)
+        img = RandomColorJitter(p=0.5, brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)(img)
     # Ensure label is always a 2D tensor of class indices
     label_np = np.array(label)
     if label_np.ndim == 3:
