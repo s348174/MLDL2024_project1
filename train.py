@@ -157,7 +157,7 @@ class AugmentedSegmentationDataset(Dataset):
         self.do_blur = do_blur
         self.do_flip = do_flip
         self.do_colorjitter = do_colorjitter
-        self.resize_size = (512, 1024)
+        self.resize_size = (720, 1280)
 
         # Prebuild deterministic transform lists
         self.base_transform = transforms.Compose([
@@ -808,12 +808,12 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         image_dir=image_dir,
         label_dir=label_dir,
         transform=transforms.Compose([
-            transforms.Resize((512, 1024)),  # Resize to 512x1024 resolution
+            transforms.Resize((720, 1280)),  # Resize to 512x1024 resolution
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]),
         target_transform=transforms.Compose([
-            transforms.Resize((512, 1024), interpolation=Image.NEAREST),
+            transforms.Resize((720, 1280), interpolation=Image.NEAREST),
             transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
         ])
     )
