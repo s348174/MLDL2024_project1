@@ -850,7 +850,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
             balanced = True
 
     # Define the loader
-    max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
+    max_num_workers = multiprocessing.cpu_count()
     # pin_memory=True is beneficial for GPU training as it speeds up data transfer to CUDA memory.
     # It is not necessary for CPU-only training and can be omitted in such cases.
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
@@ -1051,8 +1051,9 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
     #####################
     # LOADERS
     #####################
-    train_loader_src = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    train_loader_tgt = DataLoader(target_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    max_num_workers = multiprocessing.cpu_count()
+    train_loader_src = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
+    train_loader_tgt = DataLoader(target_dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
 
     #####################
     # MODEL + DISCRIMINATOR
@@ -1122,6 +1123,8 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
         current_iter = 0
     max_iter = (num_epochs-current_epoch) * len(train_loader_src) + current_iter
     print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
+
+    print(f"Starting adversarial training with {max_num_workers} workers...")
 
     #####################
     # TRAINING LOOP
@@ -1212,5 +1215,5 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
                 'context_path': context_path,  # Save the context path used
                }, export_path)
     print(f"BiSeNet model saved as bisenet_adversarial_final_{augmentation}.pth")
-    
+
     return model
