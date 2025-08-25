@@ -1,3 +1,4 @@
+from xml.parsers.expat import model
 import torch
 import random
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
@@ -838,41 +839,6 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         do_colorjitter=do_colorjitter
     )
 
-    """
-    # --- Add this block here to check pixels labels in sample images ---
-    N = 10
-    for i in range(N):
-        label_path = dataset.labels[i]
-        label_img = Image.open(label_path).convert("RGB")
-        label_np = convert_gta5_rgb_to_trainid(label_img)
-        unique, counts = np.unique(label_np, return_counts=True)
-        print(f"GTA5 Sample {i}: {dict(zip(unique, counts))}")
-    # ---------------------------
-    """
-    """
-    #######################
-    # DATASET VISUALIZATION
-    #######################
-    # Visualize the training data
-    class_names = dataset.classes
-    print(f"Class names: {class_names}")
-    print(f"Number of classes:", dataset.num_classes)
-    print(f"Number of training samples: {len(dataset.images)}")
-    print(f"Number of labels: {len(dataset.labels)}")
-    # Display the first image in the dataset
-    image = Image.open(dataset.images[0])
-    plt.imshow(image)
-    plt.title("First image in the dataset")
-    plt.axis("off")
-    plt.show()
-    # Display the first label in the dataset
-    label = Image.open(dataset.labels[0])
-    plt.imshow(label)
-    plt.title("First label in the dataset")
-    plt.axis("off")
-    plt.show()
-    """
-
     #####################
     # PREPARING THE MODEL
     #####################
@@ -884,7 +850,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
             balanced = True
 
     # Define the loader
-    max_num_workers = multiprocessing.cpu_count() #colab pro has 4 (the default has just 2) (for Emanuele)
+    max_num_workers = multiprocessing.cpu_count()
     # pin_memory=True is beneficial for GPU training as it speeds up data transfer to CUDA memory.
     # It is not necessary for CPU-only training and can be omitted in such cases.
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
@@ -915,6 +881,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
         optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
         scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
+        criterion.load_state_dict(saved_state_dict['criterion_state_dict'])  # Load criterion state
         current_epoch = saved_state_dict['epoch'] + 1  # Get current epoch from saved state
         print(f"Resuming training from epoch {current_epoch}")
     else:
@@ -970,6 +937,7 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
+                'criterion_state_dict': criterion.state_dict(),
                 'scaler': scaler.state_dict(),    # If using AMP
                 'epoch': epoch,
                 'batch_size': batch_size,  # Save the batch size for resuming training
@@ -989,3 +957,263 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
                 'context_path': context_path,  # Save the context path used
                }, export_path)
     print(f"BiSeNet model saved as bisenet_final_{augmentation}.pth")
+
+
+from itertools import zip_longest, cycle
+class Discriminator(torch.nn.Module):
+    def __init__(self, in_channels=19):
+        super(Discriminator, self).__init__()
+        self.model = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, 64, kernel_size=4, stride=2, padding=1),
+            torch.nn.LeakyReLU(0.2, inplace=True),
+
+            torch.nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            torch.nn.LeakyReLU(0.2, inplace=True),
+
+            torch.nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
+            torch.nn.LeakyReLU(0.2, inplace=True),
+
+            torch.nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
+            torch.nn.LeakyReLU(0.2, inplace=True),
+
+            torch.nn.Conv2d(512, 1, kernel_size=4, stride=2, padding=1),
+            torch.nn.Upsample(size=(512, 1024), mode='bilinear', align_corners=True)
+        )
+
+    def forward(self, x):
+        return self.model(x)
+
+
+def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pretrained_path,
+                      checkpoint=False, balanced=True, num_epochs=50, batch_size=2,
+                      context_path='resnet18', augmentation='00000', alpha=0.01):
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    #####################
+    # SOURCE DATASET (GTA5)
+    #####################
+    image_dir = dataset_path + "/images"
+    label_dir = dataset_path + "/labels"
+
+    base_dataset = GTA5(
+        image_dir=image_dir,
+        label_dir=label_dir,
+        transform=transforms.Compose([
+            transforms.Resize((512, 1024)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406],
+                                 [0.229, 0.224, 0.225]),
+        ]),
+        target_transform=transforms.Compose([
+            transforms.Resize((512, 1024), interpolation=Image.NEAREST),
+            transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
+        ])
+    )
+
+    # Augmentation selection
+    do_rotate   = augmentation[0] == "1"
+    do_multiply = augmentation[1] == "1"
+    do_blur     = augmentation[2] == "1"
+    do_flip     = augmentation[3] == "1"
+    do_colorjitter = augmentation[4] == "1"
+
+    # Wrappa il dataset base con la classe custom
+    dataset = AugmentedSegmentationDataset(
+        base_dataset,
+        do_rotate=do_rotate,
+        do_multiply=do_multiply,
+        do_blur=do_blur,
+        do_flip=do_flip,
+        do_colorjitter=do_colorjitter
+    )
+
+    #####################
+    # TARGET DATASET (Cityscapes)
+    #####################
+    # Paths to the target dataset
+    target_dir = target_path + "/images/train"
+    label_tgt_dir = target_path + "/gtFine/train"
+    # Defining the transforms
+    input_transform = transforms.Compose([
+        transforms.Resize((512, 1024)),  # Resize to 512x1024 resolution 
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),  # Standard normalization for ImageNet ([mean] and [std dev] of RGB channels)
+    ])
+    # Open the dataset
+    target_dataset = CityScapesSegmentation(
+        image_dir=target_dir,
+        label_dir=label_tgt_dir,
+        transform=input_transform,
+    )
+
+    #####################
+    # LOADERS
+    #####################
+    max_num_workers = multiprocessing.cpu_count()
+    train_loader_src = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
+    train_loader_tgt = DataLoader(target_dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
+
+    #####################
+    # MODEL + DISCRIMINATOR
+    #####################
+    # Resuming information on eventual checkpoint
+    saved_state_dict = torch.load(pretrained_path, map_location=device)
+    if checkpoint:
+        batch_size = saved_state_dict['batch_size']
+        if saved_state_dict['balanced']:
+            balanced = True
+
+    # Define model
+    model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path).to(device)
+
+    # Define discriminator
+    discriminator = Discriminator(in_channels=19).to(device)
+
+    # Define segmentation loss function, balanced or unbalanced
+    if balanced:
+        class_weights_dict = compute_gta5_class_weights(label_dir, num_classes=dataset.num_classes)
+        class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
+        criterion_seg = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
+    else:
+        criterion_seg = torch.nn.CrossEntropyLoss(ignore_index=255)
+
+    # Define domain loss function
+    criterion_domain = torch.nn.BCEWithLogitsLoss()
+
+    # Define optimizers
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=1e-4)
+    # Mixed precision training
+    scaler = GradScaler(enabled=True)
+
+    # Resuming checkpoint if available
+    print("BiSeNet pretrain loading...")
+    if checkpoint:
+        model.load_state_dict(saved_state_dict['model_state_dict'])  # Load pretrained weights
+        discriminator.load_state_dict(saved_state_dict['discriminator_state_dict'])  # Load discriminator state
+        optimizer.load_state_dict(saved_state_dict['optimizer_state_dict'])  # Load optimizer state if available
+        optimizer_d.load_state_dict(saved_state_dict['optimizer_d_state_dict'])  # Load optimizer state if available
+        scaler.load_state_dict(saved_state_dict['scaler'])  # if saved
+        criterion_seg.load_state_dict(saved_state_dict['criterion_seg_state_dict'])  # Load criterion state
+        criterion_domain.load_state_dict(saved_state_dict['criterion_domain_state_dict'])  # Load criterion state
+        current_epoch = saved_state_dict['epoch'] + 1  # Get current epoch from saved state
+        print(f"Resuming training from epoch {current_epoch}")
+    else:
+        current_epoch = 0
+        # If the model was trained with a different architecture, we need to adapt the state_dict
+        # This is a workaround to load the pretrained weights into the model
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            i_parts = i.split('.')
+            new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+        model.load_state_dict(new_params, strict=False)
+        print("Starting training from scratch with pretrained weights")
+
+    # Move model to device
+    print("Moving model to device...")
+    model = model.to(device)
+
+    # Polynomial learning rate
+    init_lr = 1e-4
+    if checkpoint:
+        current_iter = saved_state_dict['current_lr_iter']  
+    else: 
+        current_iter = 0
+    max_iter = (num_epochs-current_epoch) * len(train_loader_src) + current_iter
+    print(f"Current iteration: {current_iter}, Max iterations: {max_iter}")
+
+    print(f"Starting adversarial training with {max_num_workers} workers...")
+
+    #####################
+    # TRAINING LOOP
+    #####################
+    for epoch in range(num_epochs):
+        model.train()
+        discriminator.train()
+
+        for (src_imgs, src_labels), (tgt_imgs, _) in zip_longest(train_loader_src, cycle(train_loader_tgt)):
+            # Check for null values (necessary due to zip_longest)
+            if src_imgs is None or src_labels is None:
+                break
+
+            src_imgs, src_labels = src_imgs.to(device), src_labels.to(device)
+            tgt_imgs = tgt_imgs.to(device)
+
+            optimizer.zero_grad()
+            optimizer_d.zero_grad()
+
+            with autocast(device_type="cuda", enabled=True):
+                # 1. Segmentation loss (source)
+                outputs = model(src_imgs)
+                if isinstance(outputs, (tuple, list)) and len(outputs) == 3:
+                    main_out, aux1, aux2 = outputs
+                    seg_loss = criterion_seg(main_out, src_labels) + \
+                               0.4 * criterion_seg(aux1, src_labels) + \
+                               0.4 * criterion_seg(aux2, src_labels)
+                else:
+                    seg_loss = criterion_seg(outputs, src_labels)
+
+                # 2. Adversarial domain loss
+                src_pred = main_out.detach()
+                tgt_pred = model(tgt_imgs)[0].detach()
+
+                src_d = discriminator(src_pred)
+                tgt_d = discriminator(tgt_pred)
+
+                src_domain_loss = criterion_domain(src_d, torch.ones_like(src_d))
+                tgt_domain_loss = criterion_domain(tgt_d, torch.zeros_like(tgt_d))
+                domain_loss = src_domain_loss + tgt_domain_loss
+
+                # Total loss for generator (segmentation + adversarial)
+                outputs_tgt = model(tgt_imgs)[0]
+                adv_loss = criterion_domain(discriminator(outputs_tgt), torch.ones_like(tgt_d))
+
+                total_loss = seg_loss + alpha * adv_loss
+
+            # Train segmentation based on loss
+            scaler.scale(total_loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
+            # Update polynomial loss scheduler
+            poly_lr_scheduler(optimizer, init_lr, current_iter, max_iter=max_iter)
+            current_iter += 1
+
+            # Train discriminator separately
+            scaler.scale(domain_loss).backward()
+            scaler.step(optimizer_d)
+            scaler.update()
+
+        # Save model checkpoint
+        if epoch % 2 == 0:
+            checkpoint_file = os.path.join(workspace_path, f"export/bisenet_adversarial_epoch_{epoch}_{augmentation}.pth")
+            torch.save({
+                'model_state_dict': model.state_dict(), # Save model state
+                'discriminator_state_dict': discriminator.state_dict(), # Save discriminator state
+                'optimizer_state_dict': optimizer.state_dict(), # Save optimizer state
+                'optimizer_d_state_dict': optimizer_d.state_dict(), # Save optimizer on adversarial adaptation state
+                'criterion_seg_state_dict': criterion_seg.state_dict(), # Save segmentation criterion state
+                'criterion_domain_state_dict': criterion_domain.state_dict(), # Save domain criterion state
+                'scaler': scaler.state_dict(),    # If using AMP
+                'epoch': epoch,
+                'batch_size': batch_size,  # Save the batch size for resuming training
+                'balanced': balanced,  # Save whether the model was trained with balanced class weights
+                'current_lr_iter': current_iter,  # Save the current iteration for learning rate scheduling
+                # 'loss': loss_value,             # Optional
+            }, checkpoint_file)
+            print(f"BiSeNet model on GTA saved at epoch {epoch}")
+
+    # Save final model
+    export_path = os.path.join(workspace_path, f"export/bisenet_adversarial_final_{augmentation}.pth")
+    torch.save({
+                'model_state_dict': model.state_dict(),
+                'epoch': num_epochs,
+                'batch_size': batch_size,  # Save the batch size
+                'balanced': balanced,  # Save whether the model was trained with balanced class weights
+                'context_path': context_path,  # Save the context path used
+               }, export_path)
+    print(f"BiSeNet model saved as bisenet_adversarial_final_{augmentation}.pth")
+
+    return model
