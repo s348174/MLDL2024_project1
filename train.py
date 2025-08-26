@@ -1134,13 +1134,15 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
         model.train()
         discriminator.train()
 
-        for (src_imgs, src_labels), (tgt_imgs, _) in zip_longest(train_loader_src, cycle(train_loader_tgt)):
+        counter = 0;
+        for src, tgt in zip_longest(train_loader_src, cycle(train_loader_tgt)):
             # Check for null values (necessary due to zip_longest)
-            if src_imgs is None or src_labels is None:
+            if src is None or tgt is None:
+                print(f"One of the datasets has been exhausted, breaking epoch {epoch} at iteration {counter}.")
                 break
 
-            src_imgs, src_labels = src_imgs.to(device), src_labels.to(device)
-            tgt_imgs = tgt_imgs.to(device)
+            src_imgs, src_labels = src[0].to(device), src[1].to(device)
+            tgt_imgs = tgt[0].to(device)
 
             optimizer.zero_grad()
             optimizer_d.zero_grad()
