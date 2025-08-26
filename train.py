@@ -1140,6 +1140,7 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
             if src is None or tgt is None:
                 print(f"One of the datasets has been exhausted, breaking epoch {epoch} at iteration {counter}.")
                 break
+            counter = counter + 1
 
             src_imgs, src_labels = src[0].to(device), src[1].to(device)
             tgt_imgs = tgt[0].to(device)
