@@ -1051,13 +1051,6 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
     #####################
     # LOADERS
     #####################
-    max_num_workers = multiprocessing.cpu_count()
-    train_loader_src = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
-    train_loader_tgt = DataLoader(target_dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
-
-    #####################
-    # MODEL + DISCRIMINATOR
-    #####################
     # Resuming information on eventual checkpoint
     saved_state_dict = torch.load(pretrained_path, map_location=device)
     if checkpoint:
@@ -1065,6 +1058,14 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
         if saved_state_dict['balanced']:
             balanced = True
 
+    max_num_workers = multiprocessing.cpu_count()
+    train_loader_src = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
+    train_loader_tgt = DataLoader(target_dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
+    print(f"Training with {max_num_workers} workers and batch size {batch_size}.")
+
+    #####################
+    # MODEL + DISCRIMINATOR
+    #####################
     # Define model
     model = BiSeNet(num_classes=dataset.num_classes, context_path=context_path).to(device)
 
