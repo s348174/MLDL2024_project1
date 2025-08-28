@@ -4,10 +4,10 @@ import random
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-#from datasets.cityscapes import CityScapesSegmentation #select this for local
-from cityscapes import CityScapesSegmentation #select this for colab
-#from datasets.gta5 import GTA5 #select this for local
-from gta5 import GTA5 #select this for colab
+from datasets.cityscapes import CityScapesSegmentation #select this for local
+#from cityscapes import CityScapesSegmentation #select this for colab
+from datasets.gta5 import GTA5 #select this for local
+#from gta5 import GTA5 #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -690,6 +690,51 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
 # TESTING BISENET
 #################
 
+import matplotlib.colors as mcolors
+
+def visualize_segmentation(image_tensor, pred_mask, label_mask, num_classes=19):
+    """
+    Plot Input Image, Predicted Segmentation, and Ground Truth
+    """
+    # Cityscapes colormap (standard 19 classes + void)
+    cityscapes_colors = np.array([
+        (128, 64,128), (244, 35,232), ( 70, 70, 70), (102,102,156),
+        (190,153,153), (153,153,153), (250,170, 30), (220,220,  0),
+        (107,142, 35), (152,251,152), ( 70,130,180), (220, 20, 60),
+        (255,  0,  0), (  0,  0,142), (  0,  0, 70), (  0, 60,100),
+        (  0, 80,100), (  0,  0,230), (119, 11, 32), (  0,  0,  0)
+    ])  # RGB tuples
+
+    # Convert tensors to numpy
+    image_np = image_tensor.cpu().squeeze(0).permute(1, 2, 0).numpy()
+    image_np = (image_np * np.array([0.229, 0.224, 0.225]) + 
+                np.array([0.485, 0.456, 0.406]))  # de-normalize
+    image_np = np.clip(image_np, 0, 1)
+
+    pred_np = pred_mask.cpu().numpy()
+    label_np = label_mask.squeeze(0).cpu().numpy()
+
+    # Convert to RGB masks
+    pred_rgb = cityscapes_colors[pred_np % num_classes]
+    label_rgb = cityscapes_colors[label_np % num_classes]
+
+    # Plot
+    fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+    axs[0].imshow(image_np)
+    axs[0].set_title("Input Image")
+    axs[0].axis("off")
+
+    axs[1].imshow(pred_rgb)
+    axs[1].set_title("Predicted Segmentation")
+    axs[1].axis("off")
+
+    axs[2].imshow(label_rgb)
+    axs[2].set_title("Ground Truth")
+    axs[2].axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
 def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet18'):
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -762,6 +807,8 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
             fps.append(fps_i)
             if i % 10 == 0:
                 print(f"Iteration {i}/{len(test_loader)}, Latency: {latency_i:.4f}s, FPS: {fps_i:.2f}")
+            if i % 100 == 0:
+                visualize_segmentation(image, pred, label)
 
     ####################
     # AFTER LOOP METRICS
