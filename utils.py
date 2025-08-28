@@ -261,7 +261,9 @@ def compute_sampling_weights(dataset, temperature, option='max', num_classes=19,
 
     # Compute global class frequencies
     for label_path in labels_list:
-        label = np.array(Image.open(label_path))
+        # Open label from disk, so we need to convert it to the training ID format
+        label_img = Image.open(label_path).convert('RGB')
+        label = convert_gta5_rgb_to_trainid(label_img)
         unique, counts = np.unique(label, return_counts=True)
         for u, c in zip(unique, counts):
             if u != ignore_index:
@@ -294,6 +296,7 @@ def compute_sampling_weights(dataset, temperature, option='max', num_classes=19,
             img_weight = sum([class_weights[c] for c in unique if c != ignore_index])
         elif option == 'prop':
             # Image weight = proportional weighting. Weights images by the pixel-level frequency of each class in them
+            unique, counts = np.unique(label, return_counts=True)
             total_pixels = counts.sum()
             img_weight = sum(
                 (counts[i] / total_pixels) * class_weights[c]
