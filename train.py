@@ -4,10 +4,10 @@ import random
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-from datasets.cityscapes import CityScapesSegmentation #select this for local
-#from cityscapes import CityScapesSegmentation #select this for colab
-from datasets.gta5 import GTA5 #select this for local
-#from gta5 import GTA5 #select this for colab
+#from datasets.cityscapes import CityScapesSegmentation #select this for local
+from cityscapes import CityScapesSegmentation #select this for colab
+#from datasets.gta5 import GTA5 #select this for local
+from gta5 import GTA5 #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -21,7 +21,7 @@ from torchvision.transforms import functional as TF
 import torchvision.transforms.functional as F
 from torchvision import transforms
 from torchvision.transforms import v2, InterpolationMode
-from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler, convert_gta5_rgb_to_trainid, compute_gta5_class_weights
+from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler, convert_gta5_rgb_to_trainid, compute_gta5_class_weights, compute_sampling_weights
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
@@ -1005,8 +1005,13 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
                }, export_path)
     print(f"BiSeNet model saved as bisenet_final_{augmentation}.pth")
 
+########################
+# ADVERSARIAL ADAPTATION
+########################
 
 from itertools import zip_longest, cycle
+from torch.utils.data import WeightedRandomSampler
+
 class Discriminator(torch.nn.Module):
     def __init__(self, in_channels=19):
         super(Discriminator, self).__init__()
@@ -1030,9 +1035,8 @@ class Discriminator(torch.nn.Module):
     def forward(self, x):
         return self.model(x)
 
-
 def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pretrained_path,
-                      checkpoint=False, balanced=True, num_epochs=50, batch_size=2,
+                      checkpoint=False, balanced=True, temperature=1.0, num_epochs=50, batch_size=2,
                       context_path='resnet18', augmentation='00000', alpha=0.01):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1104,9 +1108,16 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
         batch_size = saved_state_dict['batch_size']
         if saved_state_dict['balanced']:
             balanced = True
-
+    
     max_num_workers = multiprocessing.cpu_count()
-    train_loader_src = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
+
+    # Apply class balancing in sampling
+    if balanced:
+        sample_weights = compute_sampling_weights(dataset, num_classes=dataset.num_classes)
+        sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
+
+    # Define the data loaders
+    train_loader_src = DataLoader(dataset, batch_size=batch_size, sampler=sampler if balanced else None, num_workers=max_num_workers, pin_memory=True)
     train_loader_tgt = DataLoader(target_dataset, batch_size=batch_size, shuffle=True, num_workers=max_num_workers, pin_memory=True)
     print(f"Training with {max_num_workers} workers and batch size {batch_size}.")
 
@@ -1121,7 +1132,7 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
 
     # Define segmentation loss function, balanced or unbalanced
     if balanced:
-        class_weights_dict = compute_gta5_class_weights(label_dir, num_classes=dataset.num_classes)
+        class_weights_dict = compute_gta5_class_weights(label_dir, temperature, num_classes=dataset.num_classes)
         class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
         criterion_seg = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
     else:

@@ -159,6 +159,7 @@ def convert_gta5_rgb_to_trainid(label_img):
         label_id[mask] = train_id
     return label_id
 
+# Compute class weights for GTA5 dataset
 def compute_gta5_class_weights(label_dir, num_classes=19):
     """
     Computes class pixel frequencies and balancing weights for GTA5 dataset.
@@ -208,8 +209,7 @@ def convert_weights_format(pth_file, num_epochs, batch_size, balanced, context_p
     """
     Converts a PyTorch model weights file to a format compatible with the current training setup.
     This function is a placeholder and should be implemented based on specific requirements.
-    
-    Args:
+    Inputs:
         pth_file (str): Path to the input .pth file.
         num_epochs (int): Number of epochs used for training.
         batch_size (int): Batch size used for training.
@@ -225,3 +225,63 @@ def convert_weights_format(pth_file, num_epochs, batch_size, balanced, context_p
         'context_path': context_path,
     }, pth_file)
     print(f"Converted weights saved to {pth_file} with num_epochs={num_epochs}, batch_size={batch_size}, balanced={balanced}, context_path={context_path}.")
+
+# COMPUTE SAMPLING WEIGHTS
+
+def compute_sampling_weights(dataset, temperature, num_classes=19, ignore_index=255):
+    """
+    Compute per-image sampling weights for class-balanced sampling.
+    Inputs:
+        dataset: dataset object with .labels list
+        num_classes: number of semantic classes
+        ignore_index: label value to ignore
+        temperature: controls how strongly rare classes are favored
+                     - 1.0 = original weighting (max bias)
+                     - 0.5 = softer bias
+                     - 0.0 = uniform sampling (no bias)
+
+    Output:
+        torch.DoubleTensor of sampling weights (len(dataset))
+    """
+    # Initialize class frequency array
+    class_freq = np.zeros(num_classes, dtype=np.int64)
+
+    # Check if dataset has labels
+    if hasattr(dataset, "labels"):   # GTA5 dataset
+        labels_list = dataset.labels
+    elif hasattr(dataset, "base_dataset"):   # Augmentation wrapper
+        labels_list = dataset.base_dataset.labels
+    else:
+        raise ValueError("Dataset not supported for class weight computation")
+
+    # Compute global class frequencies
+    for label_path in labels_list:
+        label = np.array(Image.open(label_path))
+        unique, counts = np.unique(label, return_counts=True)
+        for u, c in zip(unique, counts):
+            if u != ignore_index:
+                class_freq[u] += c
+
+    # Convert frequencies to inverse weights
+    class_weights = 1.0 / (class_freq + 1e-6) # Sum 1e-6 to avoid division by 0 due to underflow
+    class_weights = class_weights / class_weights.sum()  # Normalize
+
+    # Apply temperature scaling
+    if temperature != 1.0:
+        class_weights = np.power(class_weights, temperature) # Element-wise power to the temperature
+        class_weights = class_weights / class_weights.sum()  # Renormalize
+
+    # Assign per-image sampling weight
+    sample_weights = []
+    for label_path in labels_list:
+        label = np.array(Image.open(label_path))
+        unique = np.unique(label)
+        # Image weight = max rarity of classes present. In this case maximum rarity classes get absolute priority.
+        img_weight = max([class_weights[c] for c in unique if c != ignore_index], default=0.0)
+        # Image weight = mean rarity of classes present. In this case all classes contribute to the image weight. Rarer classes get smoothen out
+        #img_weight = np.mean([class_weights[c] for c in unique if c != ignore_index])
+
+
+        sample_weights.append(img_weight)
+
+    return torch.DoubleTensor(sample_weights)
