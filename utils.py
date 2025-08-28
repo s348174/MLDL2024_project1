@@ -202,30 +202,6 @@ def compute_gta5_class_weights(label_dir, num_classes=19):
         'median_freq_balanced': median_freq_balanced,
     }
 
-
-###################################################################
-
-def convert_weights_format(pth_file, num_epochs, batch_size, balanced, context_path='resnet18'):
-    """
-    Converts a PyTorch model weights file to a format compatible with the current training setup.
-    This function is a placeholder and should be implemented based on specific requirements.
-    Inputs:
-        pth_file (str): Path to the input .pth file.
-        num_epochs (int): Number of epochs used for training.
-        batch_size (int): Batch size used for training.
-        balanced (bool): Whether the training was balanced or not.
-        context_path (str): The context path used in the model, e.g., 'resnet18'.
-    """
-    old_model_dict = torch.load(pth_file, map_location='cpu')
-    torch.save({
-        'model_state_dict': old_model_dict,
-        'epoch': num_epochs,
-        'batch_size': batch_size,
-        'balanced': balanced,
-        'context_path': context_path,
-    }, pth_file)
-    print(f"Converted weights saved to {pth_file} with num_epochs={num_epochs}, batch_size={batch_size}, balanced={balanced}, context_path={context_path}.")
-
 # COMPUTE SAMPLING WEIGHTS
 
 def compute_sampling_weights(dataset, temperature, option='max', num_classes=19, ignore_index=255):
@@ -259,6 +235,7 @@ def compute_sampling_weights(dataset, temperature, option='max', num_classes=19,
     else:
         raise ValueError("Dataset not supported for class weight computation")
 
+    print(f"Computing sampling weights with strategy {option} and temperature {temperature}...")
     # Compute global class frequencies
     for label_path in labels_list:
         # Open label from disk, so we need to convert it to the training ID format
@@ -281,7 +258,8 @@ def compute_sampling_weights(dataset, temperature, option='max', num_classes=19,
     # Assign per-image sampling weight
     sample_weights = []
     for label_path in labels_list:
-        label = np.array(Image.open(label_path))
+        label_img = Image.open(label_path).convert('RGB')
+        label = convert_gta5_rgb_to_trainid(label_img)
         unique = np.unique(label)
 
         # Weighting strategy
@@ -308,3 +286,27 @@ def compute_sampling_weights(dataset, temperature, option='max', num_classes=19,
         sample_weights.append(img_weight)
 
     return torch.DoubleTensor(sample_weights)
+
+###################################################################
+
+def convert_weights_format(pth_file, num_epochs, batch_size, balanced, context_path='resnet18'):
+    """
+    Converts a PyTorch model weights file to a format compatible with the current training setup.
+    This function is a placeholder and should be implemented based on specific requirements.
+    Inputs:
+        pth_file (str): Path to the input .pth file.
+        num_epochs (int): Number of epochs used for training.
+        batch_size (int): Batch size used for training.
+        balanced (bool): Whether the training was balanced or not.
+        context_path (str): The context path used in the model, e.g., 'resnet18'.
+    """
+    old_model_dict = torch.load(pth_file, map_location='cpu')
+    torch.save({
+        'model_state_dict': old_model_dict,
+        'epoch': num_epochs,
+        'batch_size': batch_size,
+        'balanced': balanced,
+        'context_path': context_path,
+    }, pth_file)
+    print(f"Converted weights saved to {pth_file} with num_epochs={num_epochs}, batch_size={batch_size}, balanced={balanced}, context_path={context_path}.")
+
