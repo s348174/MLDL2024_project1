@@ -1036,7 +1036,7 @@ class Discriminator(torch.nn.Module):
         return self.model(x)
 
 def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pretrained_path,
-                      checkpoint=False, balanced=True, temperature=1.0, num_epochs=50, batch_size=2,
+                      checkpoint=False, balanced=True, temperature=1.0, weight_strategy='max', num_epochs=50, batch_size=2,
                       context_path='resnet18', augmentation='00000', alpha=0.01):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1113,7 +1113,7 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
 
     # Apply class balancing in sampling
     if balanced:
-        sample_weights = compute_sampling_weights(dataset, num_classes=dataset.num_classes)
+        sample_weights = compute_sampling_weights(dataset, temperature=temperature, weight_strategy=weight_strategy, num_classes=dataset.num_classes)
         sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
 
     # Define the data loaders

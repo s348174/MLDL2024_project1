@@ -228,7 +228,7 @@ def convert_weights_format(pth_file, num_epochs, batch_size, balanced, context_p
 
 # COMPUTE SAMPLING WEIGHTS
 
-def compute_sampling_weights(dataset, temperature, num_classes=19, ignore_index=255):
+def compute_sampling_weights(dataset, temperature, option='max', num_classes=19, ignore_index=255):
     """
     Compute per-image sampling weights for class-balanced sampling.
     Inputs:
@@ -239,6 +239,11 @@ def compute_sampling_weights(dataset, temperature, num_classes=19, ignore_index=
                      - 1.0 = original weighting (max bias)
                      - 0.5 = softer bias
                      - 0.0 = uniform sampling (no bias)
+        option: controls the weighting strategy
+                 - 'max': max rarity of classes present
+                 - 'mean': mean rarity of classes present
+                 - 'sum': sum rarity of classes present
+                 - 'prop': proportional weighting based on pixel-level frequency
 
     Output:
         torch.DoubleTensor of sampling weights (len(dataset))
@@ -276,11 +281,26 @@ def compute_sampling_weights(dataset, temperature, num_classes=19, ignore_index=
     for label_path in labels_list:
         label = np.array(Image.open(label_path))
         unique = np.unique(label)
-        # Image weight = max rarity of classes present. In this case maximum rarity classes get absolute priority.
-        img_weight = max([class_weights[c] for c in unique if c != ignore_index], default=0.0)
-        # Image weight = mean rarity of classes present. In this case all classes contribute to the image weight. Rarer classes get smoothen out
-        #img_weight = np.mean([class_weights[c] for c in unique if c != ignore_index])
 
+        # Weighting strategy
+        if option == 'max':
+            # Image weight = max rarity of classes present. In this case maximum rarity classes get absolute priority.
+            img_weight = max([class_weights[c] for c in unique if c != ignore_index], default=0.0)
+        elif option == 'mean':
+            # Image weight = mean rarity of classes present. In this case all classes contribute to the image weight. Rarer classes get smoothen out
+            img_weight = np.mean([class_weights[c] for c in unique if c != ignore_index])
+        elif option == 'sum':
+            # Image weight = sum rarity of classes present. Gives even more relevance where multiple rare classes are present.
+            img_weight = sum([class_weights[c] for c in unique if c != ignore_index])
+        elif option == 'prop':
+            # Image weight = proportional weighting. Weights images by the pixel-level frequency of each class in them
+            total_pixels = counts.sum()
+            img_weight = sum(
+                (counts[i] / total_pixels) * class_weights[c]
+                for i, c in enumerate(unique) if c != ignore_index
+            )
+        else:
+            raise ValueError(f"Unknown option '{option}' for sampling weight computation")
 
         sample_weights.append(img_weight)
 
