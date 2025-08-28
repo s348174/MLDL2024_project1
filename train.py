@@ -1113,7 +1113,7 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
 
     # Apply class balancing in sampling
     if balanced:
-        sample_weights = compute_sampling_weights(dataset, temperature=temperature, weight_strategy=weight_strategy, num_classes=dataset.num_classes)
+        sample_weights = compute_sampling_weights(dataset, temperature=temperature, option=weight_strategy, num_classes=dataset.num_classes)
         sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
 
     # Define the data loaders
