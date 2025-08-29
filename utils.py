@@ -304,10 +304,8 @@ def compute_sampling_from_dictionary(weight_dict, label_dir, workspace_path, tem
         class_weights = class_weights / class_weights.sum()  # Renormalize
     
     # Assign per-image sampling weight
-    print("Assigning per-image sampling weights...")
     sample_weights = []
-
-    for label_path in tqdm(label_paths, desc="Computing GTA5 class frequencies"):
+    for label_path in tqdm(label_paths, desc="Assigning per-image sampling weights"):
         label_img = Image.open(label_path).convert('RGB')  # Ensure it's in RGB format
         label_np = convert_gta5_rgb_to_trainid(label_img)
         unique = np.unique(label_np)
