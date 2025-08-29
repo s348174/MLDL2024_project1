@@ -335,14 +335,15 @@ def compute_sampling_from_dictionary(weight_dict, label_dir, workspace_path, tem
 
         sample_weights.append(img_weight)
     resulting_weights = torch.DoubleTensor(sample_weights)
-    with open(os.path.join(workspace_path, "sampling_weights.txt"), "w") as f:
+    weights_filename = f"sampling_weights_temp{temperature}_{option}.txt"
+    with open(os.path.join(workspace_path, weights_filename), "w") as f:
         # Write header with temperature and option
         f.write(f"# temperature: {temperature}\n")
         f.write(f"# option: {option}\n")
         # Write weights
         for path, weight in zip(label_paths, resulting_weights.tolist()):
             f.write(f"{os.path.basename(path)}\t{weight:.6f}\n")
-    print(f"Sampling weights exported to {os.path.join(workspace_path, 'sampling_weights.txt')} (temperature={temperature}, option={option})")
+    print(f"Sampling weights exported to {os.path.join(workspace_path, weights_filename)}")
 
 
 ###################################################################

@@ -1286,9 +1286,10 @@ def class_balancing(cityscapes_label_dir, gta_label_dir, workspace_path, option=
 
     print("Computing class weights from Cityscapes...")
     cityscapes_weights = compute_class_weights(cityscapes_label_dir, num_classes)
-
-    with open(workspace_path, "w") as f:
+    # Save the weights to a JSON file
+    weights_filename = f"cityscapes_weights_temp{temperature}_{option}.json"
+    with open(os.path.join(workspace_path, weights_filename), "w") as f:
         json.dump(cityscapes_weights, f, indent=2)
-    print(f"Cityscapes class weights exported to {workspace_path}")
+    print(f"Cityscapes class weights exported to {os.path.join(workspace_path, weights_filename)}")
 
     compute_sampling_from_dictionary(cityscapes_weights, gta_label_dir, workspace_path, option=option, num_classes=num_classes,temperature=temperature)
