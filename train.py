@@ -1035,7 +1035,7 @@ class Discriminator(torch.nn.Module):
     def forward(self, x):
         return self.model(x)
 
-def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pretrained_path,
+def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pretrained_path, weights_file_path, sampling_file_path,
                       checkpoint=False, balanced=True, temperature=1.0, weight_strategy='max', num_epochs=50, batch_size=2,
                       context_path='resnet18', augmentation='00000', alpha=0.01):
 
@@ -1113,7 +1113,25 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
 
     # Apply class balancing in sampling
     if balanced:
-        sample_weights = compute_sampling_weights(dataset, temperature=temperature, option=weight_strategy, num_classes=dataset.num_classes)
+        # Load sample weights from .txt file
+        sample_weights = []
+        label_to_weight = {}
+        # Read weights from the .txt file (skip header lines)
+        with open(sampling_file_path, "r") as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                parts = line.strip().split('\t')
+                if len(parts) == 2:
+                    label_name, weight = parts
+                    label_to_weight[label_name] = float(weight)
+        # Map each sample in the dataset to its weight
+        for i in range(len(dataset)):
+            # Get the label file name for this sample
+            label_path = dataset.base_dataset.labels[i]
+            label_name = os.path.basename(label_path)
+            sample_weights.append(label_to_weight.get(label_name, 1.0))
+        sample_weights = torch.tensor(sample_weights, dtype=torch.float32)
         sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
 
     # Define the data loaders
@@ -1132,7 +1150,8 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
 
     # Define segmentation loss function, balanced or unbalanced
     if balanced:
-        class_weights_dict = compute_gta5_class_weights(label_dir, temperature, num_classes=dataset.num_classes)
+        with open(weights_file_path, "r") as f:
+            class_weights_dict = json.load(f)
         class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
         criterion_seg = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
     else:
