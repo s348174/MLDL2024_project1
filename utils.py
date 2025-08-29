@@ -247,7 +247,7 @@ def compute_sampling_weights(dataset, temperature, option='max', num_classes=19,
                 class_freq[u] += c
 
     # Convert frequencies to inverse weights
-    class_weights = 1.0 / (class_freq + 1e-6) # Sum 1e-6 to avoid division by 0 due to underflow
+    class_weights = 1.0 / (class_freq + 1e-6) # Sum 1e-6 to avoid division by 0
     class_weights = class_weights / class_weights.sum()  # Normalize
 
     # Apply temperature scaling
@@ -256,6 +256,7 @@ def compute_sampling_weights(dataset, temperature, option='max', num_classes=19,
         class_weights = class_weights / class_weights.sum()  # Renormalize
 
     # Assign per-image sampling weight
+    print("Assigning per-image sampling weights...")
     sample_weights = []
     for label_path in labels_list:
         label_img = Image.open(label_path).convert('RGB')
