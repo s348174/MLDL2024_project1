@@ -288,6 +288,63 @@ def compute_sampling_weights(dataset, temperature, option='max', num_classes=19,
 
     return torch.DoubleTensor(sample_weights)
 
+
+def compute_sampling_from_dictionary(weight_dict, label_dir, workspace_path, temperature=1.0, option='max', num_classes=19, ignore_index=255):
+    label_paths = [os.path.join(label_dir, f) for f in os.listdir(label_dir) if f.endswith('.png')]
+
+    if len(label_paths) == 0:
+        raise ValueError(f"No label files found in {label_dir}")
+    
+    class_weights = weight_dict['inv_freqs']
+    class_weights = class_weights / class_weights.sum()  # Normalize
+
+    # Apply temperature scaling
+    if temperature != 1.0:
+        class_weights = np.power(class_weights, temperature) # Element-wise power to the temperature
+        class_weights = class_weights / class_weights.sum()  # Renormalize
+    
+    # Assign per-image sampling weight
+    print("Assigning per-image sampling weights...")
+    sample_weights = []
+
+    for label_path in tqdm(label_paths, desc="Computing GTA5 class frequencies"):
+        label_img = Image.open(label_path).convert('RGB')  # Ensure it's in RGB format
+        label_np = convert_gta5_rgb_to_trainid(label_img)
+        unique = np.unique(label_np)
+
+        # Weighting strategy
+        if option == 'max':
+            # Image weight = max rarity of classes present. In this case maximum rarity classes get absolute priority.
+            img_weight = max([class_weights[c] for c in unique if c != ignore_index], default=0.0)
+        elif option == 'mean':
+            # Image weight = mean rarity of classes present. In this case all classes contribute to the image weight. Rarer classes get smoothen out
+            img_weight = np.mean([class_weights[c] for c in unique if c != ignore_index])
+        elif option == 'sum':
+            # Image weight = sum rarity of classes present. Gives even more relevance where multiple rare classes are present.
+            img_weight = sum([class_weights[c] for c in unique if c != ignore_index])
+        elif option == 'prop':
+            # Image weight = proportional weighting. Weights images by the pixel-level frequency of each class in them
+            unique, counts = np.unique(label_np, return_counts=True)
+            total_pixels = counts.sum()
+            img_weight = sum(
+                (counts[i] / total_pixels) * class_weights[c]
+                for i, c in enumerate(unique) if c != ignore_index
+            )
+        else:
+            raise ValueError(f"Unknown option '{option}' for sampling weight computation")
+
+        sample_weights.append(img_weight)
+    resulting_weights = torch.DoubleTensor(sample_weights)
+    with open(os.path.join(workspace_path, "sampling_weights.txt"), "w") as f:
+        # Write header with temperature and option
+        f.write(f"# temperature: {temperature}\n")
+        f.write(f"# option: {option}\n")
+        # Write weights
+        for path, weight in zip(label_paths, resulting_weights.tolist()):
+            f.write(f"{os.path.basename(path)}\t{weight:.6f}\n")
+    print(f"Sampling weights exported to {os.path.join(workspace_path, 'sampling_weights.txt')} (temperature={temperature}, option={option})")
+
+
 ###################################################################
 
 def convert_weights_format(pth_file, num_epochs, batch_size, balanced, context_path='resnet18'):

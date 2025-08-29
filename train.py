@@ -1279,3 +1279,16 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
     print(f"BiSeNet model saved as bisenet_adversarial_final_{augmentation}.pth")
 
     return model
+
+from utils import compute_sampling_from_dictionary
+import json
+def class_balancing(cityscapes_label_dir, gta_label_dir, workspace_path, option='max', temperature=1.0, num_classes=19):
+
+    print("Computing class weights from Cityscapes...")
+    cityscapes_weights = compute_class_weights(cityscapes_label_dir, num_classes)
+
+    with open(workspace_path, "w") as f:
+        json.dump(cityscapes_weights, f, indent=2)
+    print(f"Cityscapes class weights exported to {workspace_path}")
+
+    compute_sampling_from_dictionary(cityscapes_weights, gta_label_dir, workspace_path, option=option, num_classes=num_classes,temperature=temperature)
