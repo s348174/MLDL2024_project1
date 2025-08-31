@@ -27,128 +27,6 @@ from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
 from torch.amp import autocast, GradScaler
 
-#classes for dataAugmentation
-
-class RandomHorizontalFlipPair:
-    def __init__(self, p=0.5):
-        self.p = p
-    def __call__(self, img, label):
-        if random.random() < self.p:
-            img = transforms.functional.hflip(img)
-            label = transforms.functional.hflip(label)
-        return img, label
-
-class RandomGaussianBlur:
-    def __init__(self, p=0.5, kernel_size=5, sigma=(0.1, 2.0)):
-        self.p = p
-        self.blur = transforms.GaussianBlur(kernel_size=kernel_size, sigma=sigma)
-    def __call__(self, img):
-        if random.random() < self.p:
-            return self.blur(img)
-        return img
-    
-class RandomMultiply:
-    def __init__(self, p=0.5, min_factor=0.7, max_factor=1.3):
-        self.p = p
-        self.min_factor = min_factor
-        self.max_factor = max_factor
-    def __call__(self, img):
-        if random.random() < self.p:
-            factor = random.uniform(self.min_factor, self.max_factor)
-            img = transforms.functional.adjust_brightness(img, factor)
-        return img
-
-class RandomRotationPair:
-    def __init__(self, degrees=10, p=0.5):
-        self.degrees = degrees
-        self.p = p
-    def __call__(self, img, label):
-        if random.random() < self.p:
-            angle = random.uniform(-self.degrees, self.degrees)
-            img = transforms.functional.rotate(img, angle, fill=0)
-            label = transforms.functional.rotate(label, angle, fill=255)  # 255 per ignore_index
-        return img, label
-    
-class RandomColorJitter:
-    def __init__(self, brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1, p=0.5):
-        self.p = p
-        self.color_jitter = transforms.ColorJitter(
-            brightness=brightness,
-            contrast=contrast,
-            saturation=saturation,
-            hue=hue
-        )
-    def __call__(self, img):
-        if random.random() < self.p:
-            return self.color_jitter(img)
-        return img
-
-
-# Joint transformation function for image and label for data augmentation
-
-def joint_transform(img, label, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False, do_colorjitter=False):
-    img = transforms.Resize((512, 1024))(img)
-    label = transforms.Resize((512, 1024), interpolation=Image.NEAREST)(label)
-    if do_rotate:
-        img, label = RandomRotationPair(p=0.5, degrees=10)(img, label)
-    if do_flip:
-        img, label = RandomHorizontalFlipPair(p=0.5)(img, label)
-    if do_blur:
-        img = RandomGaussianBlur(p=0.5, kernel_size=5, sigma=(0.1, 2.0))(img)
-    if do_multiply:
-        img = RandomMultiply(p=0.5, min_factor=0.7, max_factor=1.3)(img)
-    if do_colorjitter:
-        img = RandomColorJitter(p=0.5, brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)(img)
-    # Ensure label is always a 2D tensor of class indices
-    label_np = np.array(label)
-    if label_np.ndim == 3:
-        # If label is RGB or multi-channel, convert to single channel (assume first channel)
-        label_np = label_np[..., 0]
-    label = Image.fromarray(label_np.astype(np.uint8), mode='L')
-    return img, label
-
-
-# Custom dataset class for augmented segmentation
-"""
-class AugmentedSegmentationDataset:
-    def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False, do_colorjitter=False):
-        self.base_dataset = base_dataset
-        self.do_rotate = do_rotate
-        self.do_multiply = do_multiply
-        self.do_blur = do_blur
-        self.do_flip = do_flip
-        self.do_colorjitter = do_colorjitter
-
-    def __len__(self):
-        return len(self.base_dataset)
-
-    def __getitem__(self, idx):
-        img, label = self.base_dataset[idx]
-        if isinstance(img, torch.Tensor):
-            img = transforms.ToPILImage()(img)
-        if isinstance(label, torch.Tensor):
-            label = Image.fromarray(label.numpy().astype(np.uint8), mode='L')
-        img, label = joint_transform(
-            img, label,
-            do_rotate=self.do_rotate,
-            do_multiply=self.do_multiply,
-            do_blur=self.do_blur,
-            do_flip=self.do_flip,
-            do_colorjitter=self.do_colorjitter
-        )
-        img = transforms.ToTensor()(img)
-        img = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
-        label = torch.from_numpy(np.array(label)).long()
-        return img, label
-
-    @property
-    def num_classes(self):
-        return self.base_dataset.num_classes
-
-    @property
-    def classes(self):
-        return self.base_dataset.classes
-        """
 
 class AugmentedSegmentationDataset(Dataset):
     def __init__(self, base_dataset, do_rotate=False, do_multiply=False, do_blur=False, do_flip=False, do_colorjitter=False):
@@ -1036,8 +914,8 @@ class Discriminator(torch.nn.Module):
         return self.model(x)
 
 def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pretrained_path, weights_file_path, sampling_file_path,
-                      checkpoint=False, balanced=True, temperature=1.0, weight_strategy='max', num_epochs=50, batch_size=2,
-                      context_path='resnet18', augmentation='00000', alpha=0.01):
+                                checkpoint=False, balanced=True, num_epochs=50, batch_size=2,
+                                context_path='resnet18', augmentation='00000', alpha=0.01):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -1052,13 +930,13 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
         image_dir=image_dir,
         label_dir=label_dir,
         transform=transforms.Compose([
-            transforms.Resize((512, 1024)),
+            transforms.Resize((720, 1280)),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406],
                                  [0.229, 0.224, 0.225]),
         ]),
         target_transform=transforms.Compose([
-            transforms.Resize((512, 1024), interpolation=Image.NEAREST),
+            transforms.Resize((720, 1280), interpolation=Image.NEAREST),
             transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
         ])
     )
