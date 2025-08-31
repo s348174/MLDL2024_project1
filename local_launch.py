@@ -10,7 +10,7 @@ workspace_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_proj
 num_epochs = 1
 #deeplab_train(dataset_path_alberto, workspace_path, pretrained_image_path, num_epochs)
 
-model_path_alberto = workspace_path + "/export/bisenet_adversarial_final_11111.pth"
+model_path_alberto = workspace_path + "/export/bisenet_adversarial_50_epoch_balanced_max_highres_2_batches.pth"
 #model_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW_Masone/MLDL2024_project1/bisenet_on_gta_50_final_00001_high_brightness_and_contrast.pth"
 
 #deeplab_test(dataset_path_emanuele, model_path)
