@@ -4,10 +4,10 @@ import random
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-#from datasets.cityscapes import CityScapesSegmentation #select this for local
-from cityscapes import CityScapesSegmentation #select this for colab
-#from datasets.gta5 import GTA5 #select this for local
-from gta5 import GTA5 #select this for colab
+from datasets.cityscapes import CityScapesSegmentation #select this for local
+#from cityscapes import CityScapesSegmentation #select this for colab
+from datasets.gta5 import GTA5 #select this for local
+#from gta5 import GTA5 #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -36,7 +36,7 @@ class AugmentedSegmentationDataset(Dataset):
         self.do_blur = do_blur
         self.do_flip = do_flip
         self.do_colorjitter = do_colorjitter
-        self.resize_size = (512, 1024) # turn to 720,1280 for high resolution (512, 1024)
+        self.resize_size = (720, 1280) # turn to 720,1280 for high resolution (512, 1024)
 
         # Prebuild deterministic transform lists
         self.base_transform = transforms.Compose([
@@ -687,6 +687,7 @@ def bisenet_test(dataset_path, model_path, num_classes=19, context_path='resnet1
                 print(f"Iteration {i}/{len(test_loader)}, Latency: {latency_i:.4f}s, FPS: {fps_i:.2f}")
             if i % 100 == 0:
                 visualize_segmentation(image, pred, label)
+            
 
     ####################
     # AFTER LOOP METRICS
@@ -734,12 +735,12 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         image_dir=image_dir,
         label_dir=label_dir,
         transform=transforms.Compose([
-            transforms.Resize((512, 1024)),  # Or resize to 720,1280 resolution
+            transforms.Resize((720, 1280)),  # Or resize to 720,1280 resolution
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]),
         target_transform=transforms.Compose([
-            transforms.Resize((512, 1024), interpolation=Image.NEAREST), # Or resize to 720,1280 resolution
+            transforms.Resize((720, 1280), interpolation=Image.NEAREST), # Or resize to 720,1280 resolution
             transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
         ])
     )
@@ -915,10 +916,27 @@ class Discriminator(torch.nn.Module):
 
 def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pretrained_path, weights_file_path, sampling_file_path,
                                 checkpoint=False, balanced=True, num_epochs=50, batch_size=2,
-                                context_path='resnet18', augmentation='00000', alpha=0.01):
+                                context_path='resnet18', augmentation='00000', alpha=0.01, adaptive_epoch=False, patience=5, MIoU_window=5):
 
+    def evaluate_miou_train(model, train_loader_src, num_classes, device): # per calcolare MIoU sul training set e fare early stopping
+        model.eval()
+        hist = np.zeros((num_classes, num_classes))
+        with torch.no_grad():
+            for images, labels in train_loader_src:
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                if isinstance(outputs, (tuple, list)):
+                    outputs = outputs[0]
+                preds = torch.argmax(outputs, dim=1)
+                hist += fast_hist(labels.view(-1).cpu().numpy(), preds.view(-1).cpu().numpy(), num_classes)
+        iou_per_class = per_class_iou(hist)
+        mean_iou = np.nanmean(iou_per_class)
+        model.train()
+        return mean_iou
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+
 
     #####################
     # SOURCE DATASET (GTA5)
@@ -930,13 +948,13 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
         image_dir=image_dir,
         label_dir=label_dir,
         transform=transforms.Compose([
-            transforms.Resize((512, 1024)), # Or resize to 720,1280 resolution
+            transforms.Resize(((720, 1280))), # Or resize to 720,1280 resolution
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406],
                                  [0.229, 0.224, 0.225]),
         ]),
         target_transform=transforms.Compose([
-            transforms.Resize((512, 1024), interpolation=Image.NEAREST), # Or resize to 720,1280 resolution
+            transforms.Resize((720, 1280), interpolation=Image.NEAREST), # Or resize to 720,1280 resolution
             transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
         ])
     )
@@ -1085,11 +1103,15 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
     #####################
     # TRAINING LOOP
     #####################
+    
+    miou_history = []
+    stop_counter = 0
+
     for epoch in range(num_epochs):
         model.train()
         discriminator.train()
 
-        counter = 0;
+        counter = 0
         for src, tgt in zip_longest(train_loader_src, cycle(train_loader_tgt)):
             # Check for null values (necessary due to zip_longest)
             if src is None or tgt is None:
@@ -1145,6 +1167,31 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
             scaler.step(optimizer_d)
             scaler.update()
 
+        # Early stopping based on MIoU on source training set
+        if adaptive_epoch and epoch >= 20: # wait at least 20 epochs before starting to check
+            miou = evaluate_miou_train(model, train_loader_src, dataset.num_classes, device)
+            miou_history.append(miou)
+            print(f"Epoch {epoch}: Training mIoU = {miou:.4f}")
+
+            # Calcola la media mobile
+            if len(miou_history) >= MIoU_window:
+                moving_avg = np.mean(miou_history[-MIoU_window:])
+                prev_moving_avg = np.mean(miou_history[-MIoU_window-1:-1]) if len(miou_history) > MIoU_window else moving_avg
+                print(f"Moving average mIoU (last {MIoU_window}): {moving_avg:.4f}")
+
+                # Se la media mobile scende, aumenta il contatore
+                if moving_avg < prev_moving_avg:
+                    stop_counter += 1
+                    print(f"mIoU moving average decreased! Counter: {stop_counter}/{patience}")
+                else:
+                    stop_counter = 0
+
+                # Early stop se la mIoU scende per 'patience' epoche consecutive
+                if stop_counter >= patience:
+                    print(f"Early stopping: mIoU moving average decreased for {patience} epochs. Stopping training.")
+                    break
+
+        
         # Save model checkpoint
         if epoch % 2 == 0:
             checkpoint_file = os.path.join(workspace_path, f"export/bisenet_adversarial_epoch_{epoch}_{augmentation}.pth")
