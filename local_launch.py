@@ -13,6 +13,7 @@ num_epochs = 1
 model_path_alberto = workspace_path + "/export/bisenet_adversarial_50_epoch_balanced_max_highres_2_batches.pth"
 #model_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW_Masone/MLDL2024_project1/bisenet_on_gta_50_final_00001_high_brightness_and_contrast.pth"
 
+
 #deeplab_test(dataset_path_emanuele, model_path)
 #convert_weights_format(model_path, 50, 2, False, context_path='resnet18')
 bisenet_test(dataset_path_alberto, model_path_alberto)
