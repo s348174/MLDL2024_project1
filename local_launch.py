@@ -11,11 +11,11 @@ num_epochs = 1
 #deeplab_train(dataset_path_alberto, workspace_path, pretrained_image_path, num_epochs)
 
 #model_path_alberto = workspace_path + "/export/bisenet_adversarial_50_epoch_balanced_max_highres_2_batches.pth"
-model_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW_Masone/MLDL2024_project1/bisenet_on_gta_final_00001_new.pth"
-    #augmentation = "wxyza" w=rotate, x=multiply, y=blur, z=flip, a=color_jitter (1 yes, 0 no)
+model_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW_Masone/MLDL2024_project1/bisenet_cityscapes_2_batches_unbalanced_pretrained_polylr.pth"
+#augmentation = "wxyza" w=rotate, x=multiply, y=blur, z=flip, a=color_jitter (1 yes, 0 no)
 
 
-#deeplab_test(dataset_path_emanuele, model_path)
+#deeplab_test(dataset_path_emanuele, model_path_emanuele)
 #convert_weights_format(model_path, 50, 2, False, context_path='resnet18')
 #bisenet_test(dataset_path_alberto, model_path_alberto)
 bisenet_test(dataset_path_emanuele, model_path_emanuele)
