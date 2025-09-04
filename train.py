@@ -4,10 +4,10 @@ import random
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-from datasets.cityscapes import CityScapesSegmentation #select this for local
-#from cityscapes import CityScapesSegmentation #select this for colab
-from datasets.gta5 import GTA5 #select this for local
-#from gta5 import GTA5 #select this for colab
+#from datasets.cityscapes import CityScapesSegmentation #select this for local
+from cityscapes import CityScapesSegmentation #select this for colab
+#from datasets.gta5 import GTA5 #select this for local
+from gta5 import GTA5 #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -21,7 +21,7 @@ from torchvision.transforms import functional as TF
 import torchvision.transforms.functional as F
 from torchvision import transforms
 from torchvision.transforms import v2, InterpolationMode
-from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler, convert_gta5_rgb_to_trainid, compute_gta5_class_weights, compute_sampling_weights
+from utils import fast_hist, per_class_iou, compute_class_weights, poly_lr_scheduler, convert_gta5_rgb_to_trainid, compute_gta5_class_weights, compute_sampling_weights, convert_label_ids_to_train_ids
 import time
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 import multiprocessing
@@ -36,7 +36,7 @@ class AugmentedSegmentationDataset(Dataset):
         self.do_blur = do_blur
         self.do_flip = do_flip
         self.do_colorjitter = do_colorjitter
-        self.resize_size = (720, 1280) # turn to 720,1280 for high resolution (512, 1024)
+        self.resize_size = (512, 1024) # turn to 720,1280 for high resolution (512, 1024)
 
         # Prebuild deterministic transform lists
         self.base_transform = transforms.Compose([
@@ -735,12 +735,12 @@ def bisenet_on_gta(dataset_path, workspace_path, pretrained_path, checkpoint=Fal
         image_dir=image_dir,
         label_dir=label_dir,
         transform=transforms.Compose([
-            transforms.Resize((720, 1280)),  # Or resize to 720,1280 resolution
+            transforms.Resize((512, 1024)),  # Or resize to 720,1280 resolution
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]),
         target_transform=transforms.Compose([
-            transforms.Resize((720, 1280), interpolation=Image.NEAREST), # Or resize to 720,1280 resolution
+            transforms.Resize((512, 1024), interpolation=Image.NEAREST), # Or resize to 720,1280 resolution
             transforms.Lambda(lambda img: torch.from_numpy(convert_gta5_rgb_to_trainid(img)).long())
         ])
     )
@@ -1167,12 +1167,12 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
             scaler.step(optimizer_d)
             scaler.update()
 
-        # Early stopping based on MIoU on source training set
-        if adaptive_epoch and epoch >= 20: # wait at least 20 epochs before starting to check
-            miou = evaluate_miou_train(model, train_loader_src, dataset.num_classes, device)
-            miou_history.append(miou)
-            print(f"Epoch {epoch}: Training mIoU = {miou:.4f}")
 
+        # Early stopping based on MIoU on source training set
+        miou = evaluate_miou_train(model, train_loader_src, dataset.num_classes, device)
+        miou_history.append(miou)
+        print(f"Epoch {epoch}: Training mIoU = {miou:.4f}")
+        if adaptive_epoch and epoch >= 20: # wait at least 20 epochs before starting to check
             # Calcola la media mobile
             if len(miou_history) >= MIoU_window:
                 moving_avg = np.mean(miou_history[-MIoU_window:])
@@ -1219,6 +1219,9 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
                 'batch_size': batch_size,  # Save the batch size
                 'balanced': balanced,  # Save whether the model was trained with balanced class weights
                 'context_path': context_path,  # Save the context path used
+                'augmentation': augmentation,  # Save the augmentation used
+                'adaptive_epoch': adaptive_epoch,  # Save whether adaptive training was used
+                'stopping_epoch': epoch,  # Save the epoch at which training stopped
                }, export_path)
     print(f"BiSeNet model saved as bisenet_adversarial_final_{augmentation}.pth")
 
