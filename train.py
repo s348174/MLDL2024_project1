@@ -408,7 +408,7 @@ def deeplab_test(dataset_path, model_path, save_dir=None, num_classes=19):
 
 from models.bisenet.build_bisenet import BiSeNet
 
-def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18', augmentation = "00000"):
+def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True, balanced=True, num_epochs=50, batch_size=2, context_path='resnet18'):
 
     #augmentation = "wxyza" w=rotate, x=multiply, y=blur, z=flip, a=color_jitter (1 yes, 0 no)
 
@@ -421,30 +421,23 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
     image_dir = os.path.join(dataset_path, "images/train")
     label_dir = os.path.join(dataset_path, "gtFine/train")
 
-    # Crea il dataset base SENZA transform (le augmentation sono gestite dopo dal wrapper)
-    base_dataset = CityScapesSegmentation(
+    # Defining the transforms
+    input_transform = transforms.Compose([
+        transforms.Resize((512, 1024)),  # Resize to 512x1024 resolution 
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),  # Standard normalization for ImageNet ([mean] and [std dev] of RGB channels)
+    ])
+    target_transform = transforms.Compose([ #prepare the labels
+        transforms.Resize((512, 1024), interpolation=Image.NEAREST),  # Resize to 512x1024 resolution
+        #transforms.Lambda(lambda img: torch.from_numpy(convert_label_ids_to_train_ids(np.array(img))).long()) 
+        transforms.Lambda(lambda img: torch.from_numpy(np.array(img)).long()), # Convert to tensor
+    ])
+    # Open the dataset
+    dataset = CityScapesSegmentation(
         image_dir=image_dir,
         label_dir=label_dir,
-        transform=None,
-        target_transform=None)
-    num_classes = base_dataset.num_classes
-    classes_names = base_dataset.classes
-
-    # Augmentation selection
-    do_rotate   = augmentation[0] == "1"
-    do_multiply = augmentation[1] == "1"
-    do_blur     = augmentation[2] == "1"
-    do_flip     = augmentation[3] == "1"
-    do_colorjitter = augmentation[4] == "1"
-
-    # Wrappa il dataset base con la classe custom
-    dataset = AugmentedSegmentationDataset(
-        base_dataset,
-        do_rotate=do_rotate,
-        do_multiply=do_multiply,
-        do_blur=do_blur,
-        do_flip=do_flip,
-        do_colorjitter=do_colorjitter
+        transform=input_transform,
+        target_transform=target_transform,   
     )
 
     #####################
@@ -464,13 +457,13 @@ def bisenet_train(dataset_path, workspace_path, pretrained_path, checkpoint=True
     print(f"Training with {max_num_workers} workers and batch size {batch_size}.")
 
     # Build BiSeNet model with pretrained image
-    model = BiSeNet(num_classes=num_classes, context_path=context_path)
+    model = BiSeNet(num_classes=len(dataset.classes), context_path=context_path)
     model.to(device)  # Move model to device
 
     # Define loss function
     if balanced: 
         # Evaluate the class weights based on frequencies
-        class_weights_dict = compute_class_weights(label_dir, num_classes=num_classes)
+        class_weights_dict = compute_class_weights(label_dir, num_classes=len(dataset.classes))
         class_weights = torch.tensor(class_weights_dict['inv_freqs'], dtype=torch.float32).to(device)
         criterion = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
     else:
