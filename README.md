@@ -1,3 +1,9 @@
+# Machine Learning 2024/2025 Project: Semantic Segmentation
+
+## Alberto Prino, Emanuele Martin, Andrea Terenziani.
+
+Link of the project repo: https://github.com/s348174/MLDL2024_project1.git 
+
 ## Repository structure
 
 The main functions for training are contained in the train.py module. Also, auxiliary functions used for calculating weights or converting format that are called in train.py can be found in utils.py.
