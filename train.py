@@ -1160,12 +1160,11 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
             scaler.step(optimizer_d)
             scaler.update()
 
-
-        # Early stopping based on MIoU on source training set
-        miou = evaluate_miou_train(model, train_loader_src, dataset.num_classes, device)
-        miou_history.append(miou)
-        print(f"Epoch {epoch}: Training mIoU = {miou:.4f}")
         if adaptive_epoch and epoch >= 20: # wait at least 20 epochs before starting to check
+             # Early stopping based on MIoU on source training set
+            miou = evaluate_miou_train(model, train_loader_src, dataset.num_classes, device)
+            miou_history.append(miou)
+            print(f"Epoch {epoch}: Training mIoU = {miou:.4f}")
             # Calcola la media mobile
             if len(miou_history) >= MIoU_window:
                 moving_avg = np.mean(miou_history[-MIoU_window:])
