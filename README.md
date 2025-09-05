@@ -1,3 +1,19 @@
+## Repository structure
+
+The main functions for training are contained in the train.py module. Also, auxiliary functions used for calculating weights or converting format that are called in train.py can be found in utils.py.
+
+The 'Progetto\ ML25.ipynb' is a Colab notebook that calls the training functions. In order for the code to function: 
+1. The zip files containing the datasets need to be manually uploaded to the Google Drive linked to the same Google Account of the Colab
+2. The zip files path inside Google Drive needs to be passed to the notebook.
+3. The Colab Notebook needs to be linked to Github 
+The notebook will then access the drive, copy this repo on the drive and execute the code.
+
+The code of the models are in the models/bisenet and models/deeplabv2 subfolders.
+
+The classes for opening the Cityscapes and GTA5 datasets are inside datasets/Cityscapes and datasets/GTA5.
+
+File local_launch.py only contains a small script to execute function on local machine.
+
 ## Model initialization
 
 In the following link you can find the pretrained weights for DeepLab.
