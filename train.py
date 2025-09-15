@@ -4,10 +4,10 @@ import random
 from models.deeplabv2.deeplabv2 import ResNetMulti, get_deeplab_v2
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-from datasets.cityscapes import CityScapesSegmentation #select this for local
-#from cityscapes import CityScapesSegmentation #select this for colab
-from datasets.gta5 import GTA5 #select this for local
-#from gta5 import GTA5 #select this for colab
+#from datasets.cityscapes import CityScapesSegmentation #select this for local
+from cityscapes import CityScapesSegmentation #select this for colab
+#from datasets.gta5 import GTA5 #select this for local
+from gta5 import GTA5 #select this for colab
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -1200,7 +1200,7 @@ def bisenet_adversarial_adaptation(dataset_path, target_path, workspace_path, pr
                 'batch_size': batch_size,  # Save the batch size for resuming training
                 'balanced': balanced,  # Save whether the model was trained with balanced class weights
                 'current_lr_iter': current_iter,  # Save the current iteration for learning rate scheduling
-                'loss': loss,             # Optional
+               # 'loss': loss,             # Optional
             }, checkpoint_file)
             print(f"BiSeNet model on GTA saved at epoch {epoch}")
 
