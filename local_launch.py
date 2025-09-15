@@ -10,8 +10,8 @@ workspace_path = "/home/alberto/Documenti/Materiale scuola Alberto/MLDL2024_proj
 num_epochs = 1
 #deeplab_train(dataset_path_alberto, workspace_path, pretrained_image_path, num_epochs)
 
-#model_path_alberto = workspace_path + "/export/bisenet_adversarial_50_epoch_balanced_max_highres_2_batches.pth"
-model_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW_Masone/MLDL2024_project1/bisenet_cityscapes_2_batches_unbalanced_pretrained_polylr.pth"
+model_path_alberto = "/home/alberto/Scaricati/bisenet_adversarial_epoch_50_10111.pth"
+#model_path_emanuele = "C:/Users/marti/OneDrive/Desktop/HW_Masone/MLDL2024_project1/bisenet_cityscapes_2_batches_unbalanced_pretrained_polylr.pth"
 #augmentation = "wxyza" w=rotate, x=multiply, y=blur, z=flip, a=color_jitter (1 yes, 0 no)
 
 
